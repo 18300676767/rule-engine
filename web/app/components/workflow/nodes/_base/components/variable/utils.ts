@@ -1,6 +1,7 @@
 import type { AgentNodeType } from '../../../agent/types'
 import type { AnswerNodeType } from '../../../answer/types'
 import type { CodeNodeType } from '../../../code/types'
+import type { ConditionGroup as DiagnosisRuleConditionGroup, DiagnosisRuleNodeType, LeafCondition as DiagnosisRuleLeafCondition } from '../../../diagnosis-rule/types'
 import type { DocExtractorNodeType } from '../../../document-extractor/types'
 import type { EndNodeType } from '../../../end/types'
 import type { HttpNodeType } from '../../../http/types'
@@ -1374,6 +1375,21 @@ export const getNodeUsedVars = (node: Node): ValueSelector[] => {
             return selectors
           }),
       )
+      break
+    }
+    case BlockEnum.DiagnosisRule: {
+      const payload = data as DiagnosisRuleNodeType
+      const collectSelectors = (group: DiagnosisRuleConditionGroup): ValueSelector[] => {
+        if (!group?.conditions)
+          return []
+        return group.conditions.flatMap((child) => {
+          if ('logic' in child)
+            return collectSelectors(child as DiagnosisRuleConditionGroup)
+          const leaf = child as DiagnosisRuleLeafCondition
+          return leaf.variable_selector?.length ? [leaf.variable_selector] : []
+        })
+      }
+      res = payload.condition_tree ? collectSelectors(payload.condition_tree) : []
       break
     }
     case BlockEnum.Code: {

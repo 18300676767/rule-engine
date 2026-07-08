@@ -15,16 +15,19 @@ from dify_graph.enums import BuiltinNodeTypes, NodeType
 
 
 class LeafCondition(BaseModel):
-    """A single leaf condition: field, operator, and expected value.
+    """A single leaf condition using Dify variable selectors.
 
     Example:
-        {"field": "lab.NIHSS", "operator": "<=", "value": 15}
+        {"variable_selector": ["start-node-id", "NIHSS"], "operator": "<=", "value": 15}
     """
 
-    field: str = Field(..., description="Dot-separated field path, e.g. 'lab.NIHSS' or 'patient.age'")
-    operator: str = Field(..., description="Operator: '=', '!=', '>', '>=', '<', '<=', 'BETWEEN', "
-                           "'EQUALS', 'NOT_EQUALS', 'IN', 'NOT_IN', 'CONTAINS', 'CONTAINS_ANY', "
-                           "'CONTAINS_ALL', 'NOT_CONTAINS'")
+    id: str = Field(default="", description="Unique condition ID (from frontend)")
+    variable_selector: list[str] = Field(
+        ..., description="Variable selector [node_id, var_name] referencing the workflow variable pool"
+    )
+    comparison_operator: str = Field(..., description="Operator: '=', '!=', '>', '>=', '<', '<=', 'BETWEEN', "
+                                     "'EQUALS', 'NOT_EQUALS', 'IN', 'NOT_IN', 'CONTAINS', 'CONTAINS_ANY', "
+                                     "'CONTAINS_ALL', 'NOT_CONTAINS'")
     value: Any = Field(..., description="Expected value(s). Can be number, string, boolean, or array.")
 
 
@@ -37,6 +40,7 @@ class ConditionGroup(BaseModel):
     - AT_LEAST: at least 'minimum' child conditions must be true
     """
 
+    id: str = Field(default="", description="Unique group ID (from frontend)")
     logic: Literal["AND", "OR", "AT_LEAST"] = Field(
         ..., description="Logical operator combining child conditions"
     )

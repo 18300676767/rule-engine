@@ -214,6 +214,9 @@ export const useNodesInteractions = () => {
 
   const handleNodeDragStop = useCallback<NodeDragHandler>(
     (_, node) => {
+      if (!node)
+        return
+
       const { setHelpLineHorizontal, setHelpLineVertical }
         = workflowStore.getState()
 

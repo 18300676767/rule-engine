@@ -1,6 +1,7 @@
 import agentDefault from '@/app/components/workflow/nodes/agent/default'
 import assignerDefault from '@/app/components/workflow/nodes/assigner/default'
 import codeDefault from '@/app/components/workflow/nodes/code/default'
+import diagnosisRuleDefault from '@/app/components/workflow/nodes/diagnosis-rule/default'
 
 import documentExtractorDefault from '@/app/components/workflow/nodes/document-extractor/default'
 
@@ -28,6 +29,7 @@ export const WORKFLOW_COMMON_NODES = [
   agentDefault,
   questionClassifierDefault,
   ifElseDefault,
+  diagnosisRuleDefault,
   iterationDefault,
   iterationStartDefault,
   loopDefault,

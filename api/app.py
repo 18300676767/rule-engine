@@ -34,4 +34,16 @@ else:
     celery = cast("Celery", app.extensions["celery"])
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    import os
+
+    # Exclude external conda environments from watchdog to prevent infinite reloads
+    _exclude = [
+        os.path.join("ProgramData", "miniconda3"),
+        os.path.join("Python3"),
+        os.path.join("site-packages"),
+    ]
+    app.run(
+        host="0.0.0.0",
+        port=5001,
+        exclude_patterns=_exclude,
+    )

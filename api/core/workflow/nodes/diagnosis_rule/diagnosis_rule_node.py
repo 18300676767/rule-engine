@@ -1,9 +1,8 @@
 """
 Diagnosis Rule Evaluation Node.
 
-Recursively evaluates a condition tree (AND / OR / AT_LEAST) against patient
-data from the workflow variable pool. This is a direct Python port of the
-JsonRuleParser + OperatorEvaluator from the "治疗方案规则配置管理" demo project.
+Recursively evaluates a condition tree (AND / OR / AT_LEAST) against variables
+from the workflow variable pool. Supports true/false branch routing like IfElse.
 """
 
 from __future__ import annotations
@@ -48,12 +47,8 @@ def _to_collection(value: Any) -> list | None:
 
 
 def _apply_operator(actual_value: Any, operator: str, expected: Any) -> bool:
-    """Evaluate a single leaf condition by applying the operator.
-
-    Ported from OperatorEvaluator.java with the same 15+ operators.
-    """
+    """Evaluate a single leaf condition by applying the operator."""
     if actual_value is None:
-        # null safety: null is only "true" for negating operators
         return operator in ("NOT_IN", "NOT_EQUALS", "NOT_CONTAINS")
 
     match operator:
@@ -136,44 +131,42 @@ def _apply_operator(actual_value: Any, operator: str, expected: Any) -> bool:
         case "NOT_CONTAINS":
             actual_list = _to_collection(actual_value)
             if actual_list is None:
-                return True  # empty list doesn't contain anything
+                return True
             return str(expected) not in [str(x) for x in actual_list]
 
         case _:
-            logger.warning("Unknown operator '%s' for field", operator)
+            logger.warning("Unknown operator '%s'", operator)
             return False
 
 
 # ============================================================================
-# Field resolver (ported from FieldResolver.java)
+# Variable pool resolver
 # ============================================================================
 
-def _resolve_field(data: dict[str, Any], field_path: str) -> Any:
-    """Resolve a dot-separated field path from a nested data dictionary.
+def _resolve_variable(variable_pool: VariablePool, variable_selector: list[str]) -> Any:
+    """Resolve a variable from the workflow variable pool using [node_id, var_name].
 
-    Example: _resolve_field(data, "lab.NIHSS") -> data["lab"]["NIHSS"]
+    Returns the native Python value (str, int, float, bool, list, dict, None).
     """
-    parts = field_path.split(".")
-    current: Any = data
-    for part in parts:
-        if isinstance(current, dict):
-            current = current.get(part)
-        else:
+    if not variable_selector or len(variable_selector) < 2:
+        return None
+    try:
+        segment = variable_pool.get(variable_selector)
+        if segment is None:
             return None
-    return current
+        return segment.value
+    except Exception:
+        return None
 
 
 # ============================================================================
-# Condition tree evaluator (ported from JsonRuleParser.java)
+# Condition tree evaluator
 # ============================================================================
 
-def _evaluate_condition_group(group: ConditionGroup, data: dict[str, Any]) -> bool:
+def _evaluate_condition_group(group: ConditionGroup, variable_pool: VariablePool) -> bool:
     """Recursively evaluate a condition group with AND / OR / AT_LEAST logic.
 
-    Includes early-termination optimization:
-    - AND: stops at first False
-    - OR: stops at first True
-    - AT_LEAST: stops when threshold reached or remaining conditions insufficient
+    Includes early-termination optimization.
     """
     conditions = group.conditions
     if not conditions:
@@ -185,13 +178,13 @@ def _evaluate_condition_group(group: ConditionGroup, data: dict[str, Any]) -> bo
 
     if logic == "AND":
         for child in conditions:
-            if not _evaluate_node(child, data):
+            if not _evaluate_node(child, variable_pool):
                 return False
         return True
 
     if logic == "OR":
         for child in conditions:
-            if _evaluate_node(child, data):
+            if _evaluate_node(child, variable_pool):
                 return True
         return False
 
@@ -201,11 +194,10 @@ def _evaluate_condition_group(group: ConditionGroup, data: dict[str, Any]) -> bo
         evaluated = 0
         for child in conditions:
             evaluated += 1
-            if _evaluate_node(child, data):
+            if _evaluate_node(child, variable_pool):
                 true_count += 1
                 if true_count >= minimum:
                     return True
-            # Early termination: remaining conditions can't satisfy minimum
             remaining = total - evaluated
             if true_count + remaining < minimum:
                 return False
@@ -215,27 +207,48 @@ def _evaluate_condition_group(group: ConditionGroup, data: dict[str, Any]) -> bo
     return False
 
 
-def _evaluate_node(node: LeafCondition | ConditionGroup | dict[str, Any], data: dict[str, Any]) -> bool:
-    """Recursively evaluate a condition node (leaf or group).
-
-    Accepts dict representations for JSON-serialized conditions.
-    """
+def _evaluate_node(node: LeafCondition | ConditionGroup | dict[str, Any], variable_pool: VariablePool) -> bool:
+    """Recursively evaluate a condition node (leaf or group)."""
     if isinstance(node, dict):
         if "logic" in node:
             node = ConditionGroup.model_validate(node)
-        elif "field" in node:
+        elif "variable_selector" in node:
             node = LeafCondition.model_validate(node)
         else:
             return False
 
     if isinstance(node, ConditionGroup):
-        return _evaluate_condition_group(node, data)
+        return _evaluate_condition_group(node, variable_pool)
 
     if isinstance(node, LeafCondition):
-        actual = _resolve_field(data, node.field)
-        return _apply_operator(actual, node.operator, node.value)
+        actual = _resolve_variable(variable_pool, node.variable_selector)
+        return _apply_operator(actual, node.comparison_operator, node.value)
 
     return False
+
+
+# ============================================================================
+# Recursive variable selector extraction
+# ============================================================================
+
+def _collect_variable_selectors(node: LeafCondition | ConditionGroup | dict[str, Any]) -> list[list[str]]:
+    """Recursively collect all variable_selectors from leaf conditions."""
+    selectors: list[list[str]] = []
+    if isinstance(node, dict):
+        if "logic" in node:
+            node = ConditionGroup.model_validate(node)
+        elif "variable_selector" in node:
+            node = LeafCondition.model_validate(node)
+        else:
+            return selectors
+
+    if isinstance(node, ConditionGroup):
+        for child in node.conditions:
+            selectors.extend(_collect_variable_selectors(child))
+    elif isinstance(node, LeafCondition):
+        if node.variable_selector:
+            selectors.append(node.variable_selector)
+    return selectors
 
 
 # ============================================================================
@@ -245,14 +258,13 @@ def _evaluate_node(node: LeafCondition | ConditionGroup | dict[str, Any], data: 
 class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
     """Workflow node that evaluates a medical diagnosis rule condition tree.
 
-    Reads patient data from the variable pool (populated by the Start node),
-    recursively evaluates AND / OR / AT_LEAST conditions, and outputs:
-      - matched (bool): whether the condition tree is satisfied
-      - details (dict): evaluation trace for transparency
+    Uses the workflow variable pool to resolve variables referenced by
+    variable_selectors in leaf conditions. Outputs true/false branch routing
+    via edge_source_handle (like IfElse).
     """
 
     node_type = BuiltinNodeTypes.DIAGNOSIS_RULE
-    execution_type = NodeExecutionType.EXECUTABLE
+    execution_type = NodeExecutionType.BRANCH
 
     @classmethod
     def version(cls) -> str:
@@ -263,17 +275,8 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
         variable_pool: VariablePool = self.graph_runtime_state.variable_pool
         node_data = self.node_data
 
-        # 1. Build patient data dict from the variable pool
-        patient_data: dict[str, Any] = self._build_patient_data(variable_pool)
-
-        # 2. Evaluate conditions
         try:
-            if node_data.cases:
-                # Multi-case evaluation (like IfElse)
-                return self._evaluate_cases(node_data, patient_data)
-            else:
-                # Single condition tree evaluation
-                return self._evaluate_single(node_data, patient_data)
+            matched = _evaluate_node(node_data.condition_tree, variable_pool)
         except Exception as e:
             logger.exception("DiagnosisRuleNode evaluation failed: %s", e)
             return NodeRunResult(
@@ -281,75 +284,17 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                 error=str(e),
             )
 
-    def _evaluate_single(self, node_data: DiagnosisRuleNodeData, patient_data: dict[str, Any]) -> NodeRunResult:
-        """Evaluate a single condition tree."""
-        result = _evaluate_node(node_data.condition_tree, patient_data)
-
         return NodeRunResult(
             status=WorkflowNodeExecutionStatus.SUCCEEDED,
+            edge_source_handle="true" if matched else "false",
             outputs={
-                "matched": result,
+                "matched": matched,
                 "details": {
-                    "matched": result,
+                    "matched": matched,
                     "logic": node_data.condition_tree.logic,
-                    "patient_data_keys": list(patient_data.keys()),
                 },
             },
         )
-
-    def _evaluate_cases(self, node_data: DiagnosisRuleNodeData, patient_data: dict[str, Any]) -> NodeRunResult:
-        """Evaluate multiple case branches (first-match wins)."""
-        matched_case_id: str | None = None
-        details_list: list[dict[str, Any]] = []
-
-        for case in node_data.cases:
-            group = ConditionGroup(
-                logic=case.logical_operator,
-                conditions=case.conditions,
-            )
-            matched = _evaluate_condition_group(group, patient_data)
-            details_list.append({
-                "case_id": case.case_id,
-                "logic": case.logical_operator,
-                "matched": matched,
-            })
-            if matched:
-                matched_case_id = case.case_id
-                break
-
-        return NodeRunResult(
-            status=WorkflowNodeExecutionStatus.SUCCEEDED,
-            outputs={
-                "matched": matched_case_id is not None,
-                "matched_case_id": matched_case_id,
-                "details": details_list,
-            },
-        )
-
-    @staticmethod
-    def _build_patient_data(variable_pool: VariablePool) -> dict[str, Any]:
-        """Extract patient data from the workflow variable pool.
-
-        Reads all top-level variables from the Start node and builds a flat
-        dictionary for condition evaluation. Supports dot-path resolution
-        (e.g., 'lab.NIHSS' resolved from nested dicts).
-        """
-        patient_data: dict[str, Any] = {}
-
-        # Iterate over all node outputs in the variable pool
-        for node_id in variable_pool.get_node_ids():
-            node_vars = variable_pool.get_node_variables(node_id)
-            if node_vars is None:
-                continue
-            for var_name, var_value in node_vars.items():
-                # Skip system variables
-                if var_name.startswith("sys."):
-                    continue
-                if var_name in patient_data:
-                    continue
-                patient_data[var_name] = var_value
-
-        return patient_data
 
     @classmethod
     def _extract_variable_selector_to_variable_mapping(
@@ -361,8 +306,15 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
     ) -> Mapping[str, Sequence[str]]:
         """Extract variable selectors from all leaf conditions in the condition tree.
 
-        Unlike IfElse which uses variable_selectors within conditions, our
-        leaf conditions reference variables by field name strings. The actual
-        variable resolution happens at runtime via the variable pool.
+        Maps internal keys to variable selectors so the variable pool is populated
+        with the required variables before this node runs.
         """
-        return {}
+        var_mapping: dict[str, list[str]] = {}
+        _ = graph_config  # Explicitly mark as unused
+
+        selectors = _collect_variable_selectors(node_data.condition_tree)
+        for selector in selectors:
+            key = f"{node_id}.#{'.'.join(selector)}#"
+            var_mapping[key] = selector
+
+        return var_mapping
