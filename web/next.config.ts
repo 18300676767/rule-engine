@@ -11,9 +11,14 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@t3-oss/env-core', '@t3-oss/env-nextjs'],
   turbopack: {
     root: process.cwd(),
-    rules: codeInspectorPlugin({
-      bundler: 'turbopack',
-    }),
+    // 仅在非开发模式启用 codeInspectorPlugin（开发模式下禁用以减少内存占用）
+    ...(isDev
+      ? {}
+      : {
+          rules: codeInspectorPlugin({
+            bundler: 'turbopack',
+          }),
+        }),
   },
   productionBrowserSourceMaps: false, // enable browser source map generation during the production build
   // Configure pageExtensions to include md and mdx
@@ -35,9 +40,7 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: isDev ? false : { exclude: ['warn', 'error'] },
   },
-  experimental: {
-    turbopackFileSystemCacheForDev: true,
-  },
+  // 移除实验性 Turbopack 文件系统缓存（减少内存占用）
 }
 
 export default withMDX(nextConfig)
