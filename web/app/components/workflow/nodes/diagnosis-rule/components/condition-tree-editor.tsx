@@ -1,23 +1,23 @@
 import type { FC } from 'react'
+import type { ConditionGroup, LeafCondition } from '../types'
+import type { ComparisonOperator } from '@/app/components/workflow/nodes/if-else/types'
 import type { Node, NodeOutPutVar, ValueSelector, Var } from '@/app/components/workflow/types'
 import { RiAddLine, RiDeleteBinLine } from '@remixicon/react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
-import { VarType } from '@/app/components/workflow/types'
-import { comparisonOperatorNotRequireValue, getOperators } from '@/app/components/workflow/nodes/if-else/utils'
-import { ComparisonOperator } from '@/app/components/workflow/nodes/if-else/types'
 import ConditionOperator from '@/app/components/workflow/nodes/if-else/components/condition-list/condition-operator'
 import ConditionVarSelector from '@/app/components/workflow/nodes/if-else/components/condition-list/condition-var-selector'
+import { comparisonOperatorNotRequireValue, getOperators } from '@/app/components/workflow/nodes/if-else/utils'
 import BoolValue from '@/app/components/workflow/panel/chat-variable-panel/components/bool-value'
+import { VarType } from '@/app/components/workflow/types'
 import { cn } from '@/utils/classnames'
-import type { ConditionGroup, LeafCondition } from '../types'
 
 // ---- Color coding for logic types ----
 const LOGIC_COLORS: Record<string, string> = {
   AND: '#1890ff',
   OR: '#52c41a',
-  AT_LEAST: '#463980ff',
+  AT_LEAST: '#4127b1ff',
 }
 
 const LOGIC_OPTIONS = [
@@ -72,7 +72,7 @@ const ConditionItemView: FC<ConditionItemViewProps> = ({
   }, [condition.id, condition.value, groupId, onUpdate])
 
   const handleValueChange = useCallback((value: string | boolean) => {
-    onUpdate(groupId, condition.id, { value: value as any })
+    onUpdate(groupId, condition.id, { value })
   }, [condition.id, groupId, onUpdate])
 
   return (
@@ -198,7 +198,6 @@ const ConditionGroupView: FC<ConditionGroupViewProps> = ({
   onToggleLogic,
   onSetMinimum,
 }) => {
-  const { t } = useTranslation()
   const borderColor = LOGIC_COLORS[group.logic] || LOGIC_COLORS.AND
   const [isHovered, setIsHovered] = useState(false)
 
