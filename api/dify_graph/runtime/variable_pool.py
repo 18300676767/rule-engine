@@ -24,7 +24,8 @@ from factories import variable_factory
 
 VariableValue = Union[str, int, float, dict[str, object], list[object], File]
 
-VARIABLE_PATTERN = re.compile(r"\{\{#([a-zA-Z0-9_]{1,50}(?:\.[a-zA-Z_][a-zA-Z0-9_]{0,29}){1,10})#\}\}")
+# Allow common medical indicator characters: - ( )
+VARIABLE_PATTERN = re.compile(r"\{\{#([a-zA-Z0-9_]{1,50}(?:\.[a-zA-Z_][a-zA-Z0-9_\-()]{0,29}){1,10})#\}\}")
 
 
 class VariablePool(BaseModel):

@@ -4,9 +4,10 @@ from typing import Any
 
 from .entities import VariableSelector
 
-REGEX = re.compile(r"\{\{(#[a-zA-Z0-9_]{1,50}(\.[a-zA-Z_][a-zA-Z0-9_]{0,29}){1,10}#)\}\}")
+# Allow common medical indicator characters: - ( )
+REGEX = re.compile(r"\{\{(#[a-zA-Z0-9_]{1,50}(\.[a-zA-Z_][a-zA-Z0-9_\-()]{0,29}){1,10}#)\}\}")
 
-SELECTOR_PATTERN = re.compile(r"\{\{(#[a-zA-Z0-9_]{1,50}(?:\.[a-zA-Z_][a-zA-Z0-9_]{0,29}){1,10}#)\}\}")
+SELECTOR_PATTERN = re.compile(r"\{\{(#[a-zA-Z0-9_]{1,50}(?:\.[a-zA-Z_][a-zA-Z0-9_\-()]{0,29}){1,10}#)\}\}")
 
 
 def extract_selectors_from_template(template: str, /) -> Sequence[VariableSelector]:

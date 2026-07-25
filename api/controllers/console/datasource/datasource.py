@@ -4,13 +4,12 @@ System Datasource Catalog API.
 Provides the medical system's data field catalog for the Dify workflow
 start node's enhanced data source selector.
 
-Data sources are queried from the zhongxiyi medical database (zhongxiyi-mysql container):
+Data sources are queried from the wisdom_diagnosis MySQL database (localhost:3387):
 - Patient basic info → patient table
-- Lab test indicators → indicator_dictionary table
+- Lab test indicators → indicator_dictionary table (via report_category_indicator_rel)
 - Symptoms → symptom_sign_config table
 - ICD-10 diagnosis codes → icd10_disease table
-- Medical history → inquiry_question (western module, id 10-18)
-- Chest pain inquiry → inquiry_question (western module, id 1-9)
+- Chest pain inquiry → inquiry_question (western module, id 1,3,5,6,7,8)
 - Report types → report_category_config table
 """
 
@@ -35,23 +34,22 @@ _fh.setLevel(logging.DEBUG)
 logger.addHandler(_fh)
 logger.setLevel(logging.DEBUG)
 
-# ---- Database config (zhongxiyi medical DB) ----
-# Connection from host: localhost:3306 (Docker port mapping, zhongxiyi-mysql container)
-# Connection from Docker container: host.docker.internal:3306
-_ZHONGXIYI_HOST = os.environ.get("ZHONGXIYI_MYSQL_HOST", "127.0.0.1")
-_ZHONGXIYI_PORT = int(os.environ.get("ZHONGXIYI_MYSQL_PORT", "3306"))
-_ZHONGXIYI_USER = os.environ.get("ZHONGXIYI_MYSQL_USER", "root")
-_ZHONGXIYI_PASSWORD = os.environ.get("ZHONGXIYI_MYSQL_PASSWORD", "root123456")
-_ZHONGXIYI_DB = os.environ.get("ZHONGXIYI_MYSQL_DATABASE", "zhongxiyi")
+# ---- Database config (wisdom_diagnosis medical DB) ----
+# Connection: localhost:3387 (wisdom_diagnosis MySQL)
+_WD_HOST = os.environ.get("WISDOM_DIAGNOSIS_MYSQL_HOST", "127.0.0.1")
+_WD_PORT = int(os.environ.get("WISDOM_DIAGNOSIS_MYSQL_PORT", "3387"))
+_WD_USER = os.environ.get("WISDOM_DIAGNOSIS_MYSQL_USER", "root")
+_WD_PASSWORD = os.environ.get("WISDOM_DIAGNOSIS_MYSQL_PASSWORD", "root123")
+_WD_DB = os.environ.get("WISDOM_DIAGNOSIS_MYSQL_DATABASE", "wisdom_diagnosis")
 
 
 def _get_connection():
     return pymysql.connect(
-        host=_ZHONGXIYI_HOST,
-        port=_ZHONGXIYI_PORT,
-        user=_ZHONGXIYI_USER,
-        password=_ZHONGXIYI_PASSWORD,
-        database=_ZHONGXIYI_DB,
+        host=_WD_HOST,
+        port=_WD_PORT,
+        user=_WD_USER,
+        password=_WD_PASSWORD,
+        database=_WD_DB,
         charset="utf8mb4",
         connect_timeout=5,
         cursorclass=pymysql.cursors.DictCursor,
@@ -72,12 +70,15 @@ class DataSourceField(BaseModel):
 # Each query_fn returns list of DataSourceField from zhongxiyi DB.
 
 def _load_patient_basic_fields() -> list[dict]:
-    """Patient basic info: age, gender from patient table."""
+    """Patient basic info from patient table (wisdom_diagnosis)."""
     return [
         {"code": "age", "name": "年龄", "type": "number", "unit": "岁"},
-        {"code": "gender", "name": "性别", "type": "string", "options": ["男", "女"]},
+        {"code": "gender", "name": "性别", "type": "string", "options": ["M", "F"]},
         {"code": "allergy_history", "name": "过敏史", "type": "string"},
         {"code": "medical_history", "name": "既往病史", "type": "string"},
+        {"code": "surgery_history", "name": "手术史", "type": "string"},
+        {"code": "family_history", "name": "家族病史", "type": "string"},
+        {"code": "smoke_status", "name": "吸烟史", "type": "string", "options": ["0", "1"]},
     ]
 
 
@@ -89,9 +90,9 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT i.indicator_code, i.indicator_name, i.unit "
-                    "FROM report_category_indicator_mapping m "
-                    "JOIN indicator_dictionary i ON m.indicator_code = i.indicator_code "
-                    "WHERE m.report_category_id = %s AND i.is_active = 1 "
+                    "FROM report_category_indicator_rel m "
+                    "JOIN indicator_dictionary i ON m.indicator_id = i.id "
+                    "WHERE m.category_id = %s AND i.is_active = 1 "
                     "ORDER BY m.sort_order, i.indicator_code",
                     (category_id,),
                 )
@@ -113,14 +114,17 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
 
 
 def _load_symptom_fields() -> list[dict]:
-    """Symptoms from symptom_sign_config table."""
+    """Symptoms from symptom_sign_config table (wisdom_diagnosis).
+
+    Note: new table has no symptom_code column; use CAST(id AS CHAR) as code.
+    """
     try:
         conn = _get_connection()
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT symptom_code, symptom_name "
+                "SELECT CAST(id AS CHAR) AS symptom_code, symptom_name "
                 "FROM symptom_sign_config WHERE is_active=1 "
-                "ORDER BY sort_order, symptom_code"
+                "ORDER BY sort_order, id"
             )
             rows = cur.fetchall()
         conn.close()
@@ -219,14 +223,12 @@ def _load_western_inquiry_fields(module: str, question_ids: list[int]) -> list[d
         return []
 
 
-def _load_medical_history_fields() -> list[dict]:
-    """Medical history / risk factors from inquiry_question (western module, id 10-18)."""
-    return _load_western_inquiry_fields("western", [10, 11, 12, 13, 14, 15, 16, 17, 18])
-
-
 def _load_chest_pain_fields() -> list[dict]:
-    """Chest pain inquiry fields from inquiry_question (western module, id 1-9)."""
-    return _load_western_inquiry_fields("western", [1, 2, 3, 4, 5, 6, 7, 8, 9])
+    """Chest pain inquiry fields from inquiry_question (western module).
+
+    New DB western module IDs: 1,3,5,6,7,8 (chest pain related).
+    """
+    return _load_western_inquiry_fields("western", [1, 3, 5, 6, 7, 8])
 
 
 def _load_report_type_fields() -> list[dict]:
@@ -265,7 +267,6 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
     static_defs: list[tuple[str, str, object]] = [
         ("patient_basic", "病人基本信息", _load_patient_basic_fields),
         ("symptoms", "症状", _load_symptom_fields),
-        ("medical_history", "病史与危险因素", _load_medical_history_fields),
         ("chest_pain", "胸痛问诊", _load_chest_pain_fields),
         ("icd10", "ICD-10 诊断编码", _load_icd10_fields),
         ("exam_results", "检查报告类型", _load_report_type_fields),
@@ -280,8 +281,8 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
                 "SELECT rc.id, rc.category_name "
                 "FROM report_category_config rc "
                 "WHERE rc.is_active = 1 "
-                "AND EXISTS (SELECT 1 FROM report_category_indicator_mapping m "
-                "            WHERE m.report_category_id = rc.id) "
+                "AND EXISTS (SELECT 1 FROM report_category_indicator_rel m "
+                "            WHERE m.category_id = rc.id) "
                 "ORDER BY rc.sort_order"
             )
             categories = cur.fetchall()

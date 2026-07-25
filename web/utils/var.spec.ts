@@ -36,10 +36,19 @@ describe('Variable Utilities', () => {
     })
 
     it('should return error for invalid characters', () => {
-      expect(checkKey('invalid-key')).toBe('notValid')
       expect(checkKey('invalid key')).toBe('notValid')
       expect(checkKey('invalid.key')).toBe('notValid')
       expect(checkKey('invalid@key')).toBe('notValid')
+      expect(checkKey('-invalid')).toBe('notValid')
+      expect(checkKey('(invalid')).toBe('notValid')
+    })
+
+    it('should allow common medical indicator characters', () => {
+      expect(checkKey('LDL-C')).toBe(true)
+      expect(checkKey('HDL-C')).toBe(true)
+      expect(checkKey('Lp(a)')).toBe(true)
+      expect(checkKey('OGTT-2h')).toBe(true)
+      expect(checkKey('TC')).toBe(true)
     })
 
     it('should handle underscore correctly', () => {
@@ -70,10 +79,17 @@ describe('Variable Utilities', () => {
     })
 
     it('should stop checking after first error', () => {
-      const result = checkKeys(['valid', 'invalid-key', '1invalid'])
+      const result = checkKeys(['valid', 'invalid.key', '1invalid'])
       expect(result.isValid).toBe(false)
-      expect(result.errorKey).toBe('invalid-key')
+      expect(result.errorKey).toBe('invalid.key')
       expect(result.errorMessageKey).toBe('notValid')
+    })
+
+    it('should return valid for medical indicator keys', () => {
+      const result = checkKeys(['TC', 'LDL-C', 'HDL-C', 'Lp(a)', 'OGTT-2h'])
+      expect(result.isValid).toBe(true)
+      expect(result.errorKey).toBe('')
+      expect(result.errorMessageKey).toBe('')
     })
   })
 
@@ -135,8 +151,13 @@ describe('Variable Utilities', () => {
     })
 
     it('should ignore invalid variable names', () => {
-      const result = getVars('{{1invalid}} {{valid}} {{-invalid}}')
+      const result = getVars('{{1invalid}} {{valid}} {{invalid@key}}')
       expect(result).toEqual(['valid'])
+    })
+
+    it('should extract variables with medical indicator characters', () => {
+      const result = getVars('{{LDL-C}} {{HDL-C}} {{Lp(a)}} {{OGTT-2h}}')
+      expect(result).toEqual(['LDL-C', 'HDL-C', 'Lp(a)', 'OGTT-2h'])
     })
 
     it('should filter out variables that are too long', () => {

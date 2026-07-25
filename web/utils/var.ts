@@ -10,7 +10,8 @@ import { InputVarType } from '@/app/components/workflow/types'
 import { getMaxVarNameLength, MARKETPLACE_URL_PREFIX, MAX_VAR_KEY_LENGTH, VAR_ITEM_TEMPLATE, VAR_ITEM_TEMPLATE_IN_WORKFLOW } from '@/config'
 import { env } from '@/env'
 
-const otherAllowedRegex = /^\w+$/
+// Allow common medical indicator characters: - ( )
+const otherAllowedRegex = /^[\w\-()]+$/
 
 export const getNewVar = (key: string, type: string) => {
   const { ...rest } = VAR_ITEM_TEMPLATE
@@ -63,13 +64,17 @@ export const checkKey = (key: string, canBeEmpty?: boolean, _keys?: string[]): t
   if (key.length > MAX_VAR_KEY_LENGTH)
     return 'tooLong'
 
-  if (otherAllowedRegex.test(key)) {
-    if (/\d/.test(key[0]))
-      return 'notStartWithNumber'
+  if (!otherAllowedRegex.test(key))
+    return 'notValid'
 
-    return true
-  }
-  return 'notValid'
+  // After passing character validation, enforce first character rules
+  if (/\d/.test(key[0]))
+    return 'notStartWithNumber'
+
+  if (!/[a-zA-Z_]/.test(key[0]))
+    return 'notValid'
+
+  return true
 }
 
 type CheckKeysResult
@@ -105,7 +110,8 @@ export const hasDuplicateStr = (strArr: string[]) => {
   return !!Object.keys(strObj).find(key => strObj[key] > 1)
 }
 
-const varRegex = /\{\{([a-z_]\w*)\}\}/gi
+// Allow common medical indicator characters: - ( )
+const varRegex = /\{\{([a-z_][\w\-()]*)\}\}/gi
 export const getVars = (value: string) => {
   if (!value)
     return []

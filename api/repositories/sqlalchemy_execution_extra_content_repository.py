@@ -32,7 +32,8 @@ from repositories.execution_extra_content_repository import ExecutionExtraConten
 
 logger = logging.getLogger(__name__)
 
-_OUTPUT_VARIABLE_PATTERN = re.compile(r"\{\{#\$output\.(?P<field_name>[a-zA-Z_][a-zA-Z0-9_]{0,29})#\}\}")
+# Allow common medical indicator characters: - ( )
+_OUTPUT_VARIABLE_PATTERN = re.compile(r"\{\{#\$output\.(?P<field_name>[a-zA-Z_][a-zA-Z0-9_\-()]{0,29})#\}\}")
 
 
 def _extract_output_field_names(form_content: str) -> list[str]:

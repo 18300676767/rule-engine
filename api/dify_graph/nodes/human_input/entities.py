@@ -20,7 +20,8 @@ from dify_graph.variables.consts import SELECTORS_LENGTH
 
 from .enums import ButtonStyle, DeliveryMethodType, EmailRecipientType, FormInputType, PlaceholderType, TimeoutUnit
 
-_OUTPUT_VARIABLE_PATTERN = re.compile(r"\{\{#\$output\.(?P<field_name>[a-zA-Z_][a-zA-Z0-9_]{0,29})#\}\}")
+# Allow common medical indicator characters: - ( )
+_OUTPUT_VARIABLE_PATTERN = re.compile(r"\{\{#\$output\.(?P<field_name>[a-zA-Z_][a-zA-Z0-9_\-()]{0,29})#\}\}")
 
 
 class _WebAppDeliveryConfig(BaseModel):

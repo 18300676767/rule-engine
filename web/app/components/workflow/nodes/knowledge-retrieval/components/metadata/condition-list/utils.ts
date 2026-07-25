@@ -72,5 +72,6 @@ export const comparisonOperatorNotRequireValue = (operator?: ComparisonOperator)
   return [ComparisonOperator.empty, ComparisonOperator.notEmpty, ComparisonOperator.isNull, ComparisonOperator.isNotNull, ComparisonOperator.exists, ComparisonOperator.notExists].includes(operator)
 }
 
-export const VARIABLE_REGEX = /\{\{(#[\w-]{1,50}(\.[a-z_]\w{0,29}){1,10}#)\}\}/gi
-export const COMMON_VARIABLE_REGEX = /\{\{([\w-]{1,50})\}\}/g
+// Allow common medical indicator characters: - ( )
+export const VARIABLE_REGEX = /\{\{(#[\w\-()]{1,50}(\.[a-z_][\w\-()]{0,29}){1,10}#)\}\}/gi
+export const COMMON_VARIABLE_REGEX = /\{\{([\w\-()]{1,50})\}\}/g
