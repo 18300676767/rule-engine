@@ -36,7 +36,11 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                 edge_source_handle="false",
                 inputs=node_inputs,
                 process_data=process_data,
-                outputs={"matched": False, "details": "No condition tree defined"},
+                outputs={
+                    "matched": False,
+                    "details": "No condition tree defined",
+                    "selected_branch_id": "false",
+                },
             )
 
         try:
@@ -56,7 +60,10 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
             edge_source_handle=selected_branch,
             inputs=node_inputs,
             process_data=process_data,
-            outputs={"matched": result},
+            outputs={
+                "matched": result,
+                "selected_branch_id": selected_branch,
+            },
         )
 
     def _evaluate_group(

@@ -1172,5 +1172,14 @@
   "versionHistory.nameThisVersion": "Name this version",
   "versionHistory.releaseNotesPlaceholder": "Describe what changed",
   "versionHistory.restorationTip": "After version restoration, the current draft will be overwritten.",
-  "versionHistory.title": "Versions"
+  "versionHistory.title": "Versions",
+  "nodes.diagnosisRule.logicOperator": "Logic Operator",
+  "nodes.diagnosisRule.minimum": "Minimum matches",
+  "nodes.diagnosisRule.conditions": "Conditions",
+  "nodes.diagnosisRule.noConditions": "No conditions configured",
+  "nodes.diagnosisRule.logic_AND": "AND (all must match)",
+  "nodes.diagnosisRule.logic_OR": "OR (any can match)",
+  "nodes.diagnosisRule.logic_AT_LEAST": "AT_LEAST (match at least N)",
+  "nodes.diagnosisRule.ifDescription": "When the diagnosis rule conditions are met, the workflow continues along this branch.",
+  "nodes.diagnosisRule.elseDescription": "When the diagnosis rule conditions are not met, the workflow continues along this branch."
 }

@@ -1181,5 +1181,7 @@
   "nodes.diagnosisRule.noConditions": "尚未配置条件",
   "nodes.diagnosisRule.logic_AND": "AND (全部满足)",
   "nodes.diagnosisRule.logic_OR": "OR (任一满足)",
-  "nodes.diagnosisRule.logic_AT_LEAST": "AT_LEAST (至少满足N项)"
+  "nodes.diagnosisRule.logic_AT_LEAST": "AT_LEAST (至少满足N项)",
+  "nodes.diagnosisRule.ifDescription": "当上方诊断规则条件满足时，执行此分支连接的下一个节点。",
+  "nodes.diagnosisRule.elseDescription": "当上方诊断规则条件不满足时，执行此分支连接的下一个节点。"
 }

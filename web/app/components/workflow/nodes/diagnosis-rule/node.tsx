@@ -47,26 +47,31 @@ const DiagnosisRuleNode: FC<NodeProps<DiagnosisRuleNodeType>> = (props) => {
           ? `${leaves} condition(s)${groups > 0 ? `, ${groups} group(s)` : ''}`
           : t(`${i18nPrefix}.noConditions`, { ns: 'workflow' })}
       </div>
-      <div className="mt-0.5 flex items-center gap-1">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-state-active-bg" />
-        <span className="relative text-[10px] text-text-quaternary">
-          IF
-          <NodeSourceHandle
-            {...props}
-            handleId="true"
-            handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
-          />
-        </span>
-        <span className="mx-0.5 text-[10px] text-text-quaternary">/</span>
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-state-disabled-bg" />
-        <span className="relative text-[10px] text-text-quaternary">
-          ELSE
-          <NodeSourceHandle
-            {...props}
-            handleId="false"
-            handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
-          />
-        </span>
+
+      {/* IF branch */}
+      <div className="relative mt-2 flex h-6 items-center justify-between rounded-md bg-workflow-block-parma-bg px-2">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-state-active-bg" />
+          <span className="text-xs font-semibold text-text-secondary">IF</span>
+        </div>
+        <NodeSourceHandle
+          {...props}
+          handleId="true"
+          handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
+        />
+      </div>
+
+      {/* ELSE branch */}
+      <div className="relative mt-1.5 flex h-6 items-center justify-between rounded-md bg-workflow-block-parma-bg px-2">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-state-disabled-bg" />
+          <span className="text-xs font-semibold text-text-secondary">ELSE</span>
+        </div>
+        <NodeSourceHandle
+          {...props}
+          handleId="false"
+          handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
+        />
       </div>
     </div>
   )

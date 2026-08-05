@@ -36,6 +36,28 @@ const Panel: FC<NodePanelProps<DiagnosisRuleNodeType>> = ({ id, data }) => {
         onToggleLogic={handleToggleLogic}
         onSetMinimum={handleSetMinimum}
       />
+
+      <div className="mx-3 my-2 h-px bg-divider-subtle"></div>
+
+      {/* IF branch description */}
+      <div className="px-4 py-2">
+        <div className="system-xs-semibold-uppercase mb-1 text-text-secondary">
+          {t('nodes.ifElse.if', { ns: 'workflow' })}
+        </div>
+        <div className="text-xs font-normal leading-[18px] text-text-tertiary">
+          {t('nodes.diagnosisRule.ifDescription', { ns: 'workflow' })}
+        </div>
+      </div>
+
+      {/* ELSE branch description */}
+      <div className="px-4 py-2">
+        <div className="system-xs-semibold-uppercase mb-1 text-text-secondary">
+          {t('nodes.ifElse.else', { ns: 'workflow' })}
+        </div>
+        <div className="text-xs font-normal leading-[18px] text-text-tertiary">
+          {t('nodes.diagnosisRule.elseDescription', { ns: 'workflow' })}
+        </div>
+      </div>
     </div>
   )
 }

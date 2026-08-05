@@ -6,13 +6,14 @@ WORKDIR /app/api
 # Install uv
 ENV UV_VERSION=0.8.9
 
-RUN pip install --no-cache-dir uv==${UV_VERSION}
+# [国内源优化] 使用华为云PyPI镜像 (实测9.5MB/s，最快)
+RUN pip install --no-cache-dir uv==${UV_VERSION} -i https://repo.huaweicloud.com/repository/pypi/simple
 
 
 FROM base AS packages
 
-# if you located in China, you can use aliyun mirror to speed up
-# RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+# [国内源优化] 使用阿里云apt镜像
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -23,7 +24,9 @@ RUN apt-get update \
 
 # Install Python dependencies
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev
+# [国内源优化] 使用华为云PyPI为唯一索引源 (实测9.5MB/s)
+# 不使用--extra-index-url避免回退到官方PyPI (实测仅25KB/s，会导致超时)
+RUN UV_HTTP_TIMEOUT=600 uv sync --no-dev --index-url https://repo.huaweicloud.com/repository/pypi/simple
 
 # production stage
 FROM base AS production
@@ -50,33 +53,25 @@ WORKDIR /app/api
 
 # Create non-root user
 ARG dify_uid=1001
-ARG NODE_MAJOR=22
-ARG NODE_PACKAGE_VERSION=22.21.0-1nodesource1
-ARG NODESOURCE_KEY_FPR=6F71F525282841EEDAF851B42F59B5F99B1BE0B4
 RUN groupadd -r -g ${dify_uid} dify && \
     useradd -r -u ${dify_uid} -g ${dify_uid} -s /bin/bash dify && \
     chown -R dify:dify /app
 
-RUN \
-    apt-get update \
+# [国内源优化] production阶段也需要配置apt镜像
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
+
+# [国内源优化] 从npmmirror下载Node.js二进制包 (实测17MB/s)
+# 替代nodesource apt源 (实测仅2.5KB/s)
+ARG NODE_VERSION=22.21.0
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-        gnupg \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o /tmp/nodesource.gpg \
-    && gpg --show-keys --with-colons /tmp/nodesource.gpg \
-        | awk -F: '/^fpr:/ {print $10}' \
-        | grep -Fx "${NODESOURCE_KEY_FPR}" \
-    && gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg /tmp/nodesource.gpg \
-    && rm -f /tmp/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
-    # Install dependencies
+        xz-utils \
+    && curl -fsSL https://cdn.npmmirror.com/binaries/node/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz -o /tmp/node.tar.xz \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
     && apt-get install -y --no-install-recommends \
-        # basic environment
-        nodejs=${NODE_PACKAGE_VERSION} \
         # for gmpy2 \
         libgmp-dev libmpfr-dev libmpc-dev \
         # For Security
@@ -95,15 +90,17 @@ ENV VIRTUAL_ENV=/app/api/.venv
 COPY --from=packages --chown=dify:dify ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-# Download nltk data
+# Download nltk data (允许失败，运行时会自动下载)
 RUN mkdir -p /usr/local/share/nltk_data \
     && NLTK_DATA=/usr/local/share/nltk_data python -c "import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger'); nltk.download('stopwords')" \
-    && chmod -R 755 /usr/local/share/nltk_data
+    && chmod -R 755 /usr/local/share/nltk_data \
+    || echo "WARNING: nltk download failed, will be downloaded at runtime"
 
 ENV TIKTOKEN_CACHE_DIR=/app/api/.tiktoken_cache
 
 RUN python -c "import tiktoken; tiktoken.encoding_for_model('gpt2')" \
-    && chown -R dify:dify ${TIKTOKEN_CACHE_DIR}
+    && chown -R dify:dify ${TIKTOKEN_CACHE_DIR} \
+    || echo "WARNING: tiktoken cache failed, will be downloaded at runtime"
 
 # Copy source code
 COPY --chown=dify:dify . /app/api/

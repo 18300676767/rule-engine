@@ -16,8 +16,8 @@ const usePSInfo = () => {
       return {}
     }
   })()
-  const psPartnerKey = searchParams.get('ps_partner_key') || psInfoInCookie?.partnerKey
-  const psClickId = searchParams.get('ps_xid') || psInfoInCookie?.clickId
+  const psPartnerKey = searchParams?.get('ps_partner_key') || psInfoInCookie?.partnerKey
+  const psClickId = searchParams?.get('ps_xid') || psInfoInCookie?.clickId
   const isPSChanged = psInfoInCookie?.partnerKey !== psPartnerKey || psInfoInCookie?.clickId !== psClickId
   const [hasBind, {
     setTrue: setBind,

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { Suspense } from 'react'
 import type { Viewport } from '@/next'
 import { Provider as JotaiProvider } from 'jotai/react'
 import { ThemeProvider } from 'next-themes'
@@ -68,7 +70,9 @@ const LocaleLayout = async ({
                 <TanstackQueryInitializer>
                   <I18nServerProvider>
                     <ToastHost timeout={5000} limit={3} />
-                    <PartnerStackCookieRecorder />
+                    <Suspense fallback={null}>
+                      <PartnerStackCookieRecorder />
+                    </Suspense>
                     <ToastProvider>
                       <GlobalPublicStoreProvider>
                         <TooltipProvider delay={300} closeDelay={200}>

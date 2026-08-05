@@ -5,6 +5,12 @@
 # ==================================================================
 
 x-shared-env: &shared-api-worker-env
+  # wisdom_diagnosis external MySQL database (accessed via host.docker.internal from container)
+  WISDOM_DIAGNOSIS_MYSQL_HOST: ${WISDOM_DIAGNOSIS_MYSQL_HOST:-host.docker.internal}
+  WISDOM_DIAGNOSIS_MYSQL_PORT: ${WISDOM_DIAGNOSIS_MYSQL_PORT:-3387}
+  WISDOM_DIAGNOSIS_MYSQL_USER: ${WISDOM_DIAGNOSIS_MYSQL_USER:-root}
+  WISDOM_DIAGNOSIS_MYSQL_PASSWORD: ${WISDOM_DIAGNOSIS_MYSQL_PASSWORD:-root123}
+  WISDOM_DIAGNOSIS_MYSQL_DATABASE: ${WISDOM_DIAGNOSIS_MYSQL_DATABASE:-wisdom_diagnosis}
   CONSOLE_API_URL: ${CONSOLE_API_URL:-}
   CONSOLE_WEB_URL: ${CONSOLE_WEB_URL:-}
   SERVICE_API_URL: ${SERVICE_API_URL:-}
@@ -731,7 +737,7 @@ services:
 
   # API service
   api:
-    image: langgenius/dify-api:1.13.3
+    image: dify-api:custom
     restart: always
     environment:
       # Use the shared environment variables.
@@ -773,7 +779,7 @@ services:
   # worker service
   # The Celery worker for processing all queues (dataset, workflow, mail, etc.)
   worker:
-    image: langgenius/dify-api:1.13.3
+    image: dify-api:custom
     restart: always
     environment:
       # Use the shared environment variables.
@@ -812,7 +818,7 @@ services:
   # worker_beat service
   # Celery beat for scheduling periodic tasks.
   worker_beat:
-    image: langgenius/dify-api:1.13.3
+    image: dify-api:custom
     restart: always
     environment:
       # Use the shared environment variables.
@@ -842,7 +848,7 @@ services:
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:1.13.3
+    image: dify-web:custom
     restart: always
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}

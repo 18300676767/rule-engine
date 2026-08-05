@@ -284,15 +284,18 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                 error=str(e),
             )
 
+        selected_branch = "true" if matched else "false"
+
         return NodeRunResult(
             status=WorkflowNodeExecutionStatus.SUCCEEDED,
-            edge_source_handle="true" if matched else "false",
+            edge_source_handle=selected_branch,
             outputs={
                 "matched": matched,
                 "details": {
                     "matched": matched,
                     "logic": node_data.condition_tree.logic,
                 },
+                "selected_branch_id": selected_branch,
             },
         )
 

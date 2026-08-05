@@ -36,6 +36,7 @@ const DiagnosisRuleDefault: NodeDefault<DiagnosisRuleNodeType> = {
     return [
       { variable: 'matched', type: 'boolean' as any },
       { variable: 'details', type: 'object' as any },
+      { variable: 'selected_branch_id', type: 'string' as any },
     ]
   },
 }

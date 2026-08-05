@@ -1,6 +1,7 @@
 import type { NextConfig } from '@/next'
 import createMDX from '@next/mdx'
 import { codeInspectorPlugin } from 'code-inspector-plugin'
+import type { Configuration } from 'webpack'
 import { env } from './env'
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -39,6 +40,13 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   compiler: {
     removeConsole: isDev ? false : { exclude: ['warn', 'error'] },
+  },
+  // 修复 Windows 盘符大小写不一致导致模块重复加载的问题
+  webpack: (config: Configuration) => {
+    if (!config.resolve) config.resolve = {}
+    // 禁用带 context 的缓存键，避免同一模块因路径大小写不同被缓存为两个实例
+    ;(config.resolve as Record<string, unknown>).cacheWithContext = false
+    return config
   },
   // 移除实验性 Turbopack 文件系统缓存（减少内存占用）
 }

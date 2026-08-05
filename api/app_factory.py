@@ -96,7 +96,14 @@ def create_flask_app_with_configs() -> DifyApp:
     # add after request hook for injecting trace headers from OpenTelemetry span context
     # Only adds headers when OTEL is enabled and has valid context
     @dify_app.after_request
-    def add_trace_headers(response):
+    def add_cors_headers(response):
+        """Add CORS headers for cross-origin requests from frontend."""
+        origin = request.headers.get('Origin', '')
+        if origin and ('localhost' in origin or '127.0.0.1' in origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-App-Passport'
         try:
             span = get_current_span()
             ctx = span.get_span_context() if span else None
@@ -117,7 +124,7 @@ def create_flask_app_with_configs() -> DifyApp:
 
     # Capture the decorator's return value to avoid pyright reportUnusedFunction
     _ = before_request
-    _ = add_trace_headers
+    _ = add_cors_headers
 
     return dify_app
 
