@@ -895,6 +895,8 @@ services:
                -c 'idle_in_transaction_session_timeout=${POSTGRES_IDLE_IN_TRANSACTION_SESSION_TIMEOUT:-0}'
     volumes:
       - ./volumes/db/data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test:
         [
@@ -950,6 +952,8 @@ services:
     volumes:
       # Mount the redis data directory to the container.
       - ./volumes/redis/data:/data
+    ports:
+      - "6380:6379"
     # Set the redis password when startup redis server.
     command: redis-server --requirepass ${REDIS_PASSWORD:-difyai123456}
     healthcheck:
@@ -963,6 +967,8 @@ services:
   sandbox:
     image: langgenius/dify-sandbox:0.2.14
     restart: always
+    ports:
+      - "8194:8194"
     environment:
       # The DifySandbox configurations
       # Make sure you are changing this key for your deployment with a strong key.
@@ -1037,6 +1043,7 @@ services:
       SENTRY_ENABLED: ${PLUGIN_SENTRY_ENABLED:-false}
       SENTRY_DSN: ${PLUGIN_SENTRY_DSN:-}
     ports:
+      - "${EXPOSE_PLUGIN_DAEMON_PORT:-5002}:${PLUGIN_DAEMON_PORT:-5002}"
       - "${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}:${PLUGIN_DEBUGGING_PORT:-5003}"
     volumes:
       - ./volumes/plugin_daemon:/app/storage
@@ -1060,6 +1067,8 @@ services:
   ssrf_proxy:
     image: ubuntu/squid:latest
     restart: always
+    ports:
+      - "3128:3128"
     volumes:
       - ./ssrf_proxy/squid.conf.template:/etc/squid/squid.conf.template
       - ./ssrf_proxy/docker-entrypoint.sh:/docker-entrypoint-mount.sh
@@ -1151,6 +1160,9 @@ services:
     profiles:
       - weaviate
     restart: always
+    ports:
+      - "8080:8080"
+      - "50051:50051"
     volumes:
       # Mount the Weaviate data directory to the con tainer.
       - ./volumes/weaviate:/var/lib/weaviate
@@ -1633,7 +1645,7 @@ networks:
   # create a network between sandbox, api and ssrf_proxy, and can not access outside.
   ssrf_proxy_network:
     driver: bridge
-    internal: true
+    # internal: true  # Disabled for local dev: allows sandbox port mapping to host
   milvus:
     driver: bridge
   opensearch-net:

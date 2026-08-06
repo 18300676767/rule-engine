@@ -303,6 +303,7 @@ export const useNodesInteractions = () => {
                 && node.data.type !== BlockEnum.IfElse
                 && node.data.type !== BlockEnum.QuestionClassifier
                 && node.data.type !== BlockEnum.HumanInput
+                && node.data.type !== BlockEnum.DiagnosisRule
               ) {
                 n.data._isEntering = true
               }
@@ -1020,6 +1021,7 @@ export const useNodesInteractions = () => {
           nodeType !== BlockEnum.IfElse
           && nodeType !== BlockEnum.QuestionClassifier
           && nodeType !== BlockEnum.HumanInput
+          && nodeType !== BlockEnum.DiagnosisRule
         ) {
           newNode.data._connectedSourceHandleIds = [sourceHandle]
         }
@@ -1057,6 +1059,7 @@ export const useNodesInteractions = () => {
           nodeType !== BlockEnum.IfElse
           && nodeType !== BlockEnum.QuestionClassifier
           && nodeType !== BlockEnum.HumanInput
+          && nodeType !== BlockEnum.DiagnosisRule
           && nodeType !== BlockEnum.LoopEnd
         ) {
           newEdge = {
@@ -1249,6 +1252,7 @@ export const useNodesInteractions = () => {
           nodeType !== BlockEnum.IfElse
           && nodeType !== BlockEnum.QuestionClassifier
           && nodeType !== BlockEnum.HumanInput
+          && nodeType !== BlockEnum.DiagnosisRule
           && nodeType !== BlockEnum.LoopEnd
         ) {
           newNextEdge = {

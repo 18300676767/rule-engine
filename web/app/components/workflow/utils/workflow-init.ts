@@ -253,6 +253,13 @@ export const initialNodes = (originNodes: Node[], originEdges: Edge[]) => {
       })
     }
 
+    if (node.data.type === BlockEnum.DiagnosisRule) {
+      node.data._targetBranches = branchNameCorrect([
+        { id: 'true', name: '' },
+        { id: 'false', name: '' },
+      ])
+    }
+
     if (node.data.type === BlockEnum.Iteration) {
       const iterationNodeData = node.data as IterationNodeType
       iterationNodeData._children = iterationOrLoopNodeMap[node.id] || []

@@ -347,6 +347,57 @@ const buildIfElseWithPorts = (
 }
 
 /**
+ * Build DiagnosisRule node with ELK native Ports for IF/ELSE branches
+ */
+const buildDiagnosisRuleWithPorts = (
+  diagnosisRuleNode: Node,
+  edges: Edge[],
+): { node: ElkNodeShape, portMap: Map<string, string> } | null => {
+  const childEdges = edges.filter(edge => edge.source === diagnosisRuleNode.id)
+
+  if (childEdges.length <= 1)
+    return null
+
+  // Sort: 'true' (IF) first, 'false' (ELSE) last
+  const sortedChildEdges = [...childEdges].sort((edgeA, edgeB) => {
+    const handleA = edgeA.sourceHandle
+    const handleB = edgeB.sourceHandle
+    if (handleA === 'false')
+      return 1
+    if (handleB === 'false')
+      return -1
+    return 0
+  })
+
+  const ports: ElkPortShape[] = sortedChildEdges.map((edge, index) => ({
+    id: `${diagnosisRuleNode.id}-port-${edge.sourceHandle || index}`,
+    layoutOptions: {
+      'port.side': 'EAST',
+      'port.index': String(index),
+    },
+  }))
+
+  const portMap = new Map<string, string>()
+  sortedChildEdges.forEach((edge, index) => {
+    const portId = `${diagnosisRuleNode.id}-port-${edge.sourceHandle || index}`
+    portMap.set(edge.id, portId)
+  })
+
+  return {
+    node: {
+      id: diagnosisRuleNode.id,
+      width: diagnosisRuleNode.width ?? DEFAULT_NODE_WIDTH,
+      height: diagnosisRuleNode.height ?? DEFAULT_NODE_HEIGHT,
+      ports,
+      layoutOptions: {
+        'elk.portConstraints': 'FIXED_ORDER',
+      },
+    },
+    portMap,
+  }
+}
+
+/**
  * Build Human Input node with ELK native Ports for multiple branches
  * Handles user actions as branches with __timeout as the last fixed branch
  */
@@ -488,6 +539,18 @@ export const getLayoutByDagre = async (originNodes: Node[], originEdges: Edge[])
       }
       else {
         // No multiple branches, use normal node
+        elkNodes.push(toElkNode(node))
+      }
+    }
+    else if (node.data.type === BlockEnum.DiagnosisRule) {
+      const portsResult = buildDiagnosisRuleWithPorts(node, edges)
+      if (portsResult) {
+        elkNodes.push(portsResult.node)
+        portsResult.portMap.forEach((portId, edgeId) => {
+          edgeToPortMap.set(edgeId, portId)
+        })
+      }
+      else {
         elkNodes.push(toElkNode(node))
       }
     }
