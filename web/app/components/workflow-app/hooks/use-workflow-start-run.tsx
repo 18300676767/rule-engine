@@ -53,7 +53,10 @@ export const useWorkflowStartRun = () => {
     }
 
     if (!startVariables.length && !fileSettings?.image?.enabled) {
-      await doSyncWorkflowDraft()
+      await Promise.race([
+        doSyncWorkflowDraft(),
+        new Promise(resolve => setTimeout(resolve, 10_000)),
+      ])
       handleRun({ inputs: {}, files: [] })
       setShowDebugAndPreviewPanel(true)
       setShowInputsPanel(false)
@@ -106,7 +109,10 @@ export const useWorkflowStartRun = () => {
     setListeningTriggerNodeIds([nodeId])
     setListeningTriggerIsAll(false)
 
-    await doSyncWorkflowDraft()
+    await Promise.race([
+      doSyncWorkflowDraft(),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ])
     handleRun(
       {},
       undefined,
@@ -160,7 +166,10 @@ export const useWorkflowStartRun = () => {
     setListeningTriggerNodeIds([nodeId])
     setListeningTriggerIsAll(false)
 
-    await doSyncWorkflowDraft()
+    await Promise.race([
+      doSyncWorkflowDraft(),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ])
     handleRun(
       { node_id: nodeId },
       undefined,
@@ -211,7 +220,10 @@ export const useWorkflowStartRun = () => {
     setListeningTriggerNodeIds([nodeId])
     setListeningTriggerIsAll(false)
 
-    await doSyncWorkflowDraft()
+    await Promise.race([
+      doSyncWorkflowDraft(),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ])
     handleRun(
       { node_id: nodeId },
       undefined,
@@ -250,7 +262,10 @@ export const useWorkflowStartRun = () => {
     if (!showDebugAndPreviewPanel)
       setShowDebugAndPreviewPanel(true)
 
-    await doSyncWorkflowDraft()
+    await Promise.race([
+      doSyncWorkflowDraft(),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ])
     handleRun(
       { node_ids: nodeIds },
       undefined,

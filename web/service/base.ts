@@ -383,6 +383,20 @@ export const handleStream = (
       }
       if (!hasError)
         read()
+    }).catch((e) => {
+      // Handle stream reading errors (e.g., "Error in input stream", network interruption)
+      const errMsg = e instanceof Error ? e.message : String(e)
+      if (errMsg !== 'The user aborted a request.' && !errMsg.includes('AbortError')) {
+        onData('', false, {
+          conversationId: undefined,
+          messageId: '',
+          errorMessage: errMsg,
+        })
+        onCompleted?.(true, errMsg)
+      }
+      else {
+        onCompleted?.()
+      }
     })
   }
   read()
@@ -592,7 +606,7 @@ export const ssePost = async (
       )
     })
     .catch((e) => {
-      if (e.toString() !== 'AbortError: The user aborted a request.' && !e.toString().errorMessage.includes('TypeError: Cannot assign to read only property'))
+      if (e.toString() !== 'AbortError: The user aborted a request.' && !e.toString().includes('TypeError: Cannot assign to read only property'))
         Toast.notify({ type: 'error', message: e })
       onError?.(e)
     })

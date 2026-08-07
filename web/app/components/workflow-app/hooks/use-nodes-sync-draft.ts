@@ -127,10 +127,14 @@ export const useNodesSyncDraft = () => {
     }
     catch (error: any) {
       if (error && error.json && !error.bodyUsed) {
-        error.json().then((err: any) => {
+        try {
+          const err = await error.json()
           if (err.code === 'draft_workflow_not_sync' && !notRefreshWhenSyncError)
             handleRefreshWorkflowDraft(true)
-        })
+        }
+        catch {
+          // ignore JSON parse errors on error response
+        }
       }
       callback?.onError?.()
     }
@@ -143,6 +147,7 @@ export const useNodesSyncDraft = () => {
 
   return {
     doSyncWorkflowDraft,
+    performSync,
     syncWorkflowDraftWhenPageClose,
   }
 }

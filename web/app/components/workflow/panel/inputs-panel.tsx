@@ -93,10 +93,15 @@ const InputsPanel = ({ onRun }: Props) => {
   }
 
   const doRun = useCallback(() => {
-    if (!checkInputsForm(initialInputs, variables as any))
+    console.log('[DIAG] doRun clicked, checking form...')
+    if (!checkInputsForm(initialInputs, variables as any)) {
+      console.log('[DIAG] checkInputsForm returned false, aborting')
       return
+    }
+    console.log('[DIAG] Form OK, calling handleRun...')
     onRun()
     handleRun({ inputs: getProcessedInputs(initialInputs, variables as any), files })
+    console.log('[DIAG] handleRun called (async, may still be running)')
   }, [files, handleRun, initialInputs, onRun, variables, checkInputsForm])
 
   const canRun = useMemo(() => {

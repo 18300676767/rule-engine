@@ -39,3 +39,29 @@ class CodeExecutorJinja2TemplateRenderer(Jinja2TemplateRenderer):
         if not isinstance(rendered, str):
             raise TemplateRenderError("Template render result must be a string.")
         return rendered
+
+
+class InProcessJinja2TemplateRenderer:
+    """Renders Jinja2 templates in-process using the Jinja2 library directly.
+
+    This avoids the Sandbox overhead by rendering templates in the current Python process.
+    Suitable for simple template rendering without code execution.
+    """
+
+    def render_template(self, template: str, variables: Mapping[str, Any]) -> str:
+        try:
+            from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
+
+            env = Environment(undefined=StrictUndefined)
+            tmpl = env.from_string(template)
+            rendered = tmpl.render(**variables)
+        except TemplateSyntaxError as e:
+            raise TemplateRenderError(f"Template syntax error: {e}") from e
+        except UndefinedError as e:
+            raise TemplateRenderError(f"Undefined variable in template: {e}") from e
+        except Exception as e:
+            raise TemplateRenderError(f"Template render failed: {e}") from e
+
+        if not isinstance(rendered, str):
+            raise TemplateRenderError("Template render result must be a string.")
+        return rendered

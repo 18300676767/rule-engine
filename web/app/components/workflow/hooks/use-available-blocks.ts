@@ -13,7 +13,7 @@ const HIDDEN_FOR_MEDICAL: BlockEnum[] = [
   BlockEnum.Agent,
   BlockEnum.QuestionClassifier,
   BlockEnum.ParameterExtractor,
-  BlockEnum.TemplateTransform,
+  // TemplateTransform unhidden for medical project (static text output without Sandbox)
 ]
 
 const availableBlocksFilter = (nodeType: BlockEnum, inContainer?: boolean) => {

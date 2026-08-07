@@ -53,7 +53,7 @@ export const useWorkflowRun = () => {
   const workflowStore = useWorkflowStore()
   const reactflow = useReactFlow()
   const featuresStore = useFeaturesStore()
-  const { doSyncWorkflowDraft } = useNodesSyncDraft()
+  const { doSyncWorkflowDraft, performSync } = useNodesSyncDraft()
   const { handleUpdateWorkflowCanvas } = useWorkflowUpdate()
   const pathname = usePathname()
   const configsMap = useConfigsMap()
@@ -145,6 +145,7 @@ export const useWorkflowRun = () => {
     callback?: IOtherOptions,
     options?: HandleRunOptions,
   ) => {
+    console.log('[DIAG] handleRun called, params:', params, 'options:', options)
     const runMode = options?.mode ?? TriggerType.UserInput
     const resolvedParams = params ?? {}
     const {
@@ -158,7 +159,19 @@ export const useWorkflowRun = () => {
       })
     })
     setNodes(newNodes)
-    await doSyncWorkflowDraft()
+    console.log('[DIAG] Before doSyncWorkflowDraft...')
+    // Bypass serial queue: call performSync directly with 3s timeout
+    // This prevents auto-save queue from blocking the test run request
+    try {
+      await Promise.race([
+        performSync(true), // notRefreshWhenSyncError=true to avoid triggering refresh cycle
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('sync timeout')), 3000)),
+      ])
+    }
+    catch {
+      console.warn('[TestRun] Draft sync skipped (timeout or error), proceeding with run')
+    }
+    console.log('[DIAG] After doSyncWorkflowDraft (or timeout)')
 
     const {
       onWorkflowStarted,
@@ -192,12 +205,16 @@ export const useWorkflowRun = () => {
     } = workflowContainer!
 
     const isInWorkflowDebug = appDetail?.mode === AppModeEnum.WORKFLOW
+    console.log('[DIAG] appDetail mode:', appDetail?.mode, 'isInWorkflowDebug:', isInWorkflowDebug, 'runMode:', runMode)
 
     const url = resolveWorkflowRunUrl(appDetail, runMode, isInWorkflowDebug)
     const requestBody = buildWorkflowRunRequestBody(runMode, resolvedParams, options)
+    console.log('[DIAG] resolved URL:', url, 'requestBody:', requestBody)
 
-    if (!url)
+    if (!url) {
+      console.error('[DIAG] URL is empty! resolveWorkflowRunUrl returned empty. appDetail:', appDetail)
       return
+    }
 
     const validationMessage = validateWorkflowRunRequest(runMode, options)
     if (validationMessage) {
@@ -320,6 +337,7 @@ export const useWorkflowRun = () => {
     })
 
     if (isDebuggableTriggerType(runMode)) {
+      console.log('[DIAG] Taking debuggable trigger path:', runMode)
       await runTriggerDebug({
         debugType: runMode,
         url,
@@ -357,6 +375,7 @@ export const useWorkflowRun = () => {
       },
     })
 
+    console.log('[DIAG] Taking ssePost path, url:', url)
     ssePost(
       url,
       {
@@ -364,7 +383,8 @@ export const useWorkflowRun = () => {
       },
       finalCallbacks,
     )
-  }, [store, doSyncWorkflowDraft, workflowStore, pathname, handleWorkflowFailed, flowId, handleWorkflowStarted, handleWorkflowFinished, fetchInspectVars, invalidAllLastRun, invalidateRunHistory, handleWorkflowNodeStarted, handleWorkflowNodeFinished, handleWorkflowNodeIterationStarted, handleWorkflowNodeIterationNext, handleWorkflowNodeIterationFinished, handleWorkflowNodeLoopStarted, handleWorkflowNodeLoopNext, handleWorkflowNodeLoopFinished, handleWorkflowNodeRetry, handleWorkflowAgentLog, handleWorkflowTextChunk, handleWorkflowTextReplace, handleWorkflowPaused, handleWorkflowNodeHumanInputRequired, handleWorkflowNodeHumanInputFormFilled, handleWorkflowNodeHumanInputFormTimeout])
+    console.log('[DIAG] ssePost called successfully')
+  }, [store, performSync, workflowStore, pathname, handleWorkflowFailed, flowId, handleWorkflowStarted, handleWorkflowFinished, fetchInspectVars, invalidAllLastRun, invalidateRunHistory, handleWorkflowNodeStarted, handleWorkflowNodeFinished, handleWorkflowNodeIterationStarted, handleWorkflowNodeIterationNext, handleWorkflowNodeIterationFinished, handleWorkflowNodeLoopStarted, handleWorkflowNodeLoopNext, handleWorkflowNodeLoopFinished, handleWorkflowNodeRetry, handleWorkflowAgentLog, handleWorkflowTextChunk, handleWorkflowTextReplace, handleWorkflowPaused, handleWorkflowNodeHumanInputRequired, handleWorkflowNodeHumanInputFormFilled, handleWorkflowNodeHumanInputFormTimeout])
 
   const handleStopRun = useCallback((taskId: string) => {
     const setStoppedState = () => {

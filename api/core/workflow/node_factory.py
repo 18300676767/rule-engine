@@ -50,6 +50,7 @@ from dify_graph.nodes.parameter_extractor.entities import ParameterExtractorNode
 from dify_graph.nodes.question_classifier.entities import QuestionClassifierNodeData
 from dify_graph.nodes.template_transform.template_renderer import (
     CodeExecutorJinja2TemplateRenderer,
+    InProcessJinja2TemplateRenderer,
 )
 from dify_graph.variables.segments import StringSegment
 from extensions.ext_database import db
@@ -264,7 +265,7 @@ class DifyNodeFactory(NodeFactory):
             max_string_array_length=dify_config.CODE_MAX_STRING_ARRAY_LENGTH,
             max_object_array_length=dify_config.CODE_MAX_OBJECT_ARRAY_LENGTH,
         )
-        self._template_renderer = CodeExecutorJinja2TemplateRenderer(code_executor=self._code_executor)
+        self._template_renderer = InProcessJinja2TemplateRenderer()
         self._llm_template_renderer: TemplateRenderer = DefaultLLMTemplateRenderer()
         self._template_transform_max_output_length = dify_config.TEMPLATE_TRANSFORM_MAX_LENGTH
         self._http_request_http_client = ssrf_proxy
