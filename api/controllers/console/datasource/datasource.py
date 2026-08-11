@@ -5,16 +5,19 @@ Provides the medical system's data field catalog for the Dify workflow
 start node's enhanced data source selector.
 
 Data sources are queried from the wisdom_diagnosis MySQL database (localhost:3387):
-- Patient basic info → patient table
+- Patient basic info → patient table (dynamic, read from table columns)
 - Lab test indicators → indicator_dictionary table (via report_category_indicator_rel)
-- Symptoms → symptom_sign_config table
 - ICD-10 diagnosis codes → icd10_disease table
-- Chest pain inquiry → inquiry_question (western module, id 1,3,5,6,7,8)
+- Chest pain inquiry → inquiry_question (western module, dynamic — all active questions)
 - Report types → report_category_config table
+
+Note: symptom_sign_config is NOT included — symptoms are captured via inquiry
+questions, not as direct workflow inputs.
 """
 
 import logging
 import os
+import re
 import time
 
 import pymysql
@@ -70,16 +73,56 @@ class DataSourceField(BaseModel):
 # Each query_fn returns list of DataSourceField from zhongxiyi DB.
 
 def _load_patient_basic_fields() -> list[dict]:
-    """Patient basic info from patient table (wisdom_diagnosis)."""
-    return [
-        {"code": "age", "name": "年龄", "type": "number", "unit": "岁"},
-        {"code": "gender", "name": "性别", "type": "string", "options": ["M", "F"]},
-        {"code": "allergy_history", "name": "过敏史", "type": "string"},
-        {"code": "medical_history", "name": "既往病史", "type": "string"},
-        {"code": "surgery_history", "name": "手术史", "type": "string"},
-        {"code": "family_history", "name": "家族病史", "type": "string"},
-        {"code": "smoke_status", "name": "吸烟史", "type": "string", "options": ["0", "1"]},
-    ]
+    """Patient basic info — dynamically read from patient table columns."""
+    try:
+        conn = _get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SHOW FULL COLUMNS FROM patient")
+            columns = cur.fetchall()
+        conn.close()
+
+        # Skip internal/ID columns that are not useful as workflow inputs
+        _skip_cols = {"id", "created_at", "updated_at", "deleted"}
+
+        result = []
+        for col in columns:
+            col_name = col["Field"]
+            if col_name in _skip_cols:
+                continue
+
+            comment = col.get("Comment") or col_name
+            col_type = (col.get("Type") or "").lower()
+
+            # Determine field type and options based on DB column type
+            field: dict = {"code": col_name, "name": comment, "type": "string"}
+
+            if "int" in col_type or "decimal" in col_type or "float" in col_type or "double" in col_type:
+                field["type"] = "number"
+            elif "enum(" in col_type:
+                # Extract enum values, e.g. enum('M','F') → ['M', 'F']
+                vals = re.findall(r"'([^']*)'", col_type)
+                if vals:
+                    field["type"] = "string"
+                    field["options"] = vals
+            elif "tinyint" in col_type:
+                field["type"] = "string"
+                field["options"] = ["0", "1"]
+            elif col_name == "gender":
+                field["options"] = ["M", "F"]
+
+            # Add unit hints for known fields
+            if col_name == "age":
+                field["unit"] = "岁"
+
+            result.append(field)
+        return result
+    except Exception as e:
+        logger.error("Failed to load patient basic fields: %s", e)
+        # Fallback to minimal hardcoded list
+        return [
+            {"code": "age", "name": "年龄", "type": "number", "unit": "岁"},
+            {"code": "gender", "name": "性别", "type": "string", "options": ["M", "F"]},
+        ]
 
 
 def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
@@ -113,34 +156,6 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
     return loader
 
 
-def _load_symptom_fields() -> list[dict]:
-    """Symptoms from symptom_sign_config table (wisdom_diagnosis).
-
-    Note: new table has no symptom_code column; use CAST(id AS CHAR) as code.
-    """
-    try:
-        conn = _get_connection()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT CAST(id AS CHAR) AS symptom_code, symptom_name "
-                "FROM symptom_sign_config WHERE is_active=1 "
-                "ORDER BY sort_order, id"
-            )
-            rows = cur.fetchall()
-        conn.close()
-        return [
-            {
-                "code": r["symptom_code"],
-                "name": r["symptom_name"],
-                "type": "boolean",
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        logger.error("Failed to load symptoms: %s", e)
-        return []
-
-
 def _load_icd10_fields() -> list[dict]:
     """ICD-10 diagnosis codes from icd10_disease table (leaf entries by level)."""
     try:
@@ -166,27 +181,19 @@ def _load_icd10_fields() -> list[dict]:
         return []
 
 
-def _load_western_inquiry_fields(module: str, question_ids: list[int]) -> list[dict]:
-    """Load inquiry fields dynamically from inquiry_question + inquiry_question_option.
-
-    Args:
-        module: The inquiry_module value, e.g. 'western'.
-        question_ids: Ordered list of question IDs for this category.
-    """
+def _load_chest_pain_fields() -> list[dict]:
+    """Chest pain inquiry — dynamically load all active western module questions."""
     try:
         conn = _get_connection()
         with conn.cursor() as cur:
-            placeholders = ",".join(["%s"] * len(question_ids))
             cur.execute(
-                f"SELECT id, question_title, question_type "
-                f"FROM inquiry_question "
-                f"WHERE inquiry_module=%s AND id IN ({placeholders}) AND is_active=1 "
-                f"ORDER BY FIELD(id, {placeholders})",
-                [module] + question_ids + question_ids,
+                "SELECT id, question_title, question_type "
+                "FROM inquiry_question "
+                "WHERE inquiry_module='western' AND is_active=1 "
+                "ORDER BY id"
             )
             questions = cur.fetchall()
 
-            # Batch-load options for all questions
             if questions:
                 q_ids = [q["id"] for q in questions]
                 ph = ",".join(["%s"] * len(q_ids))
@@ -201,7 +208,6 @@ def _load_western_inquiry_fields(module: str, question_ids: list[int]) -> list[d
                 all_options = []
         conn.close()
 
-        # Group options by question_id
         opt_map: dict[int, list[str]] = {}
         for opt in all_options:
             opt_map.setdefault(opt["question_id"], []).append(opt["option_label"])
@@ -219,16 +225,8 @@ def _load_western_inquiry_fields(module: str, question_ids: list[int]) -> list[d
             result.append(field)
         return result
     except Exception as e:
-        logger.error("Failed to load western inquiry fields (module=%s): %s", module, e)
+        logger.error("Failed to load western inquiry fields: %s", e)
         return []
-
-
-def _load_chest_pain_fields() -> list[dict]:
-    """Chest pain inquiry fields from inquiry_question (western module).
-
-    New DB western module IDs: 1,3,5,6,7,8 (chest pain related).
-    """
-    return _load_western_inquiry_fields("western", [1, 3, 5, 6, 7, 8])
 
 
 def _load_report_type_fields() -> list[dict]:
@@ -264,9 +262,10 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
         (definitions_list, meta_dict)
     """
     # Static categories (always present)
+    # Note: symptom_sign_config is NOT a workflow input — symptoms are captured
+    # via inquiry questions (chest_pain etc.), so it's excluded from the catalog.
     static_defs: list[tuple[str, str, object]] = [
         ("patient_basic", "病人基本信息", _load_patient_basic_fields),
-        ("symptoms", "症状", _load_symptom_fields),
         ("chest_pain", "胸痛问诊", _load_chest_pain_fields),
         ("icd10", "ICD-10 诊断编码", _load_icd10_fields),
         ("exam_results", "检查报告类型", _load_report_type_fields),
