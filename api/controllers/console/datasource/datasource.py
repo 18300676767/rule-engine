@@ -181,52 +181,58 @@ def _load_icd10_fields() -> list[dict]:
         return []
 
 
-def _load_chest_pain_fields() -> list[dict]:
-    """Chest pain inquiry — dynamically load all active western module questions."""
-    try:
-        conn = _get_connection()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, question_title, question_type "
-                "FROM inquiry_question "
-                "WHERE inquiry_module='western' AND is_active=1 "
-                "ORDER BY id"
-            )
-            questions = cur.fetchall()
-
-            if questions:
-                q_ids = [q["id"] for q in questions]
-                ph = ",".join(["%s"] * len(q_ids))
+def _load_inquiry_fields(module: str, catalog_name: str) -> callable:
+    """Return a loader function that fetches inquiry questions for a specific module."""
+    def loader() -> list[dict]:
+        """Inquiry questions — dynamically load all active questions for the given module."""
+        try:
+            conn = _get_connection()
+            with conn.cursor() as cur:
                 cur.execute(
-                    f"SELECT question_id, option_label, option_value "
-                    f"FROM inquiry_question_option "
-                    f"WHERE question_id IN ({ph}) ORDER BY question_id, sort_order",
-                    q_ids,
+                    "SELECT id, question_code, question_title, question_type "
+                    "FROM inquiry_question "
+                    "WHERE inquiry_module=%s AND is_active=1 "
+                    "ORDER BY sort_order, id",
+                    (module,),
                 )
-                all_options = cur.fetchall()
-            else:
-                all_options = []
-        conn.close()
+                questions = cur.fetchall()
 
-        opt_map: dict[int, list[str]] = {}
-        for opt in all_options:
-            opt_map.setdefault(opt["question_id"], []).append(opt["option_label"])
+                if questions:
+                    q_ids = [q["id"] for q in questions]
+                    ph = ",".join(["%s"] * len(q_ids))
+                    cur.execute(
+                        f"SELECT question_id, option_label, option_value "
+                        f"FROM inquiry_question_option "
+                        f"WHERE question_id IN ({ph}) ORDER BY question_id, sort_order",
+                        q_ids,
+                    )
+                    all_options = cur.fetchall()
+                else:
+                    all_options = []
+            conn.close()
 
-        result = []
-        for q in questions:
-            field: dict = {
-                "code": f"q_{q['id']}",
-                "name": q["question_title"],
-                "type": "string" if q["question_type"] == "single_choice" else "list",
-            }
-            opts = opt_map.get(q["id"])
-            if opts:
-                field["options"] = opts
-            result.append(field)
-        return result
-    except Exception as e:
-        logger.error("Failed to load western inquiry fields: %s", e)
-        return []
+            opt_map: dict[int, list[str]] = {}
+            for opt in all_options:
+                opt_map.setdefault(opt["question_id"], []).append(opt["option_label"])
+
+            result = []
+            for q in questions:
+                # Use question_code if available, fallback to id
+                code = q.get("question_code") or str(q["id"])
+                field: dict = {
+                    "code": f"q_{code}",
+                    "name": q["question_title"],
+                    "type": "string" if q["question_type"] == "single_choice" else "list",
+                }
+                opts = opt_map.get(q["id"])
+                if opts:
+                    field["options"] = opts
+                result.append(field)
+            return result
+        except Exception as e:
+            logger.error("Failed to load %s inquiry fields: %s", module, e)
+            return []
+    return loader
 
 
 def _load_report_type_fields() -> list[dict]:
@@ -253,6 +259,31 @@ def _load_report_type_fields() -> list[dict]:
         return []
 
 
+def _load_clinical_param_fields() -> list[dict]:
+    """Clinical parameters from encounter_clinical_param table (e.g. PTP)."""
+    try:
+        conn = _get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT param_key, param_type "
+                "FROM encounter_clinical_param "
+                "ORDER BY param_key"
+            )
+            rows = cur.fetchall()
+        conn.close()
+        return [
+            {
+                "code": r["param_key"],
+                "name": r["param_key"].upper(),
+                "type": "number" if r.get("param_type") == "decimal" else "string",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.error("Failed to load clinical params: %s", e)
+        return []
+
+
 # ---- Build catalog definitions (static + dynamic report categories) ----
 
 def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str, tuple[str, object]]]:
@@ -266,7 +297,9 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
     # via inquiry questions (chest_pain etc.), so it's excluded from the catalog.
     static_defs: list[tuple[str, str, object]] = [
         ("patient_basic", "病人基本信息", _load_patient_basic_fields),
-        ("chest_pain", "胸痛问诊", _load_chest_pain_fields),
+        ("western_inquiry", "西医问诊", _load_inquiry_fields("western", "西医问诊")),
+        ("tcm_inquiry", "中医问诊", _load_inquiry_fields("tcm", "中医问诊")),
+        ("clinical_params", "临床参数", _load_clinical_param_fields),
         ("icd10", "ICD-10 诊断编码", _load_icd10_fields),
         ("exam_results", "检查报告类型", _load_report_type_fields),
     ]
