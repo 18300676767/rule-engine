@@ -33,9 +33,26 @@ class ConditionGroupData(BaseModel):
 
 
 class DiagnosisRuleNodeData(BaseNodeData):
-    """Diagnosis Rule node data with recursive condition tree."""
+    """Diagnosis Rule node data with recursive condition tree.
+
+    Supports two modes:
+    - ``cases``: multi-branch evaluation (if set, ``condition_tree`` is ignored).
+    - ``condition_tree``: legacy single-tree evaluation (backward compatible).
+    """
 
     type: NodeType = BuiltinNodeTypes.DIAGNOSIS_RULE
 
     condition_tree: ConditionGroupData | None = None
     output_fields: list[str] | None = None
+
+    class Case(BaseModel):
+        """A single case branch within the node."""
+
+        case_id: str = Field(..., description="Unique identifier for this case")
+        logical_operator: Literal["AND", "OR", "AT_LEAST"] = "AND"
+        conditions: list[LeafConditionData | ConditionGroupData] = Field(default_factory=list)
+
+    cases: list[Case] | None = Field(
+        default=None,
+        description="Multiple case branches (if set, condition_tree is ignored)",
+    )

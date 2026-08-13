@@ -271,12 +271,37 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
         return "1"
 
     def _run(self) -> NodeRunResult:
-        """Execute the diagnosis rule evaluation."""
+        """Execute the diagnosis rule evaluation.
+
+        Supports two modes:
+        - Multi-branch (cases): iterate cases in order, first match wins.
+        - Legacy (condition_tree): single tree evaluation with true/false routing.
+        """
         variable_pool: VariablePool = self.graph_runtime_state.variable_pool
         node_data = self.node_data
 
         try:
-            matched = _evaluate_node(node_data.condition_tree, variable_pool)
+            if node_data.cases:
+                # Multi-branch mode: iterate cases, first match wins
+                selected_branch = "false"
+                case_results: list[dict[str, Any]] = []
+
+                for case in node_data.cases:
+                    case_group = ConditionGroup(
+                        id=case.case_id,
+                        logic=case.logical_operator,
+                        conditions=case.conditions,
+                    )
+                    matched = _evaluate_node(case_group, variable_pool)
+                    case_results.append({"case_id": case.case_id, "matched": matched})
+                    if matched:
+                        selected_branch = case.case_id
+                        break
+            else:
+                # Backward compatibility: single condition_tree evaluation
+                matched = _evaluate_node(node_data.condition_tree, variable_pool)
+                selected_branch = "true" if matched else "false"
+                case_results = [{"case_id": selected_branch, "matched": matched}]
         except Exception as e:
             logger.exception("DiagnosisRuleNode evaluation failed: %s", e)
             return NodeRunResult(
@@ -284,17 +309,13 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                 error=str(e),
             )
 
-        selected_branch = "true" if matched else "false"
-
         return NodeRunResult(
             status=WorkflowNodeExecutionStatus.SUCCEEDED,
             edge_source_handle=selected_branch,
             outputs={
-                "matched": matched,
-                "details": {
-                    "matched": matched,
-                    "logic": node_data.condition_tree.logic,
-                },
+                "matched": selected_branch != "false",
+                "selected_case_id": selected_branch,
+                "details": {"case_results": case_results},
                 "selected_branch_id": selected_branch,
             },
         )
@@ -307,17 +328,29 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
         node_id: str,
         node_data: DiagnosisRuleNodeData,
     ) -> Mapping[str, Sequence[str]]:
-        """Extract variable selectors from all leaf conditions in the condition tree.
+        """Extract variable selectors from all leaf conditions.
 
-        Maps internal keys to variable selectors so the variable pool is populated
-        with the required variables before this node runs.
+        When ``cases`` is set, collects from every case's conditions.
+        Otherwise falls back to the legacy ``condition_tree``.
         """
         var_mapping: dict[str, list[str]] = {}
         _ = graph_config  # Explicitly mark as unused
 
-        selectors = _collect_variable_selectors(node_data.condition_tree)
-        for selector in selectors:
-            key = f"{node_id}.#{'.'.join(selector)}#"
-            var_mapping[key] = selector
+        if node_data.cases:
+            for case in node_data.cases:
+                case_group = ConditionGroup(
+                    id=case.case_id,
+                    logic=case.logical_operator,
+                    conditions=case.conditions,
+                )
+                selectors = _collect_variable_selectors(case_group)
+                for selector in selectors:
+                    key = f"{node_id}.#{'.'.join(selector)}#"
+                    var_mapping[key] = selector
+        else:
+            selectors = _collect_variable_selectors(node_data.condition_tree)
+            for selector in selectors:
+                key = f"{node_id}.#{'.'.join(selector)}#"
+                var_mapping[key] = selector
 
         return var_mapping

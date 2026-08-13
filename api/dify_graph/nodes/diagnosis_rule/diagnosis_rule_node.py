@@ -28,23 +28,44 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
     def _run(self) -> NodeRunResult:
         node_inputs: dict[str, Any] = {"conditions": []}
         process_data: dict[str, Any] = {"evaluation_details": []}
-
-        condition_tree = self.node_data.condition_tree
-        if not condition_tree:
-            return NodeRunResult(
-                status=WorkflowNodeExecutionStatus.SUCCEEDED,
-                edge_source_handle="false",
-                inputs=node_inputs,
-                process_data=process_data,
-                outputs={
-                    "matched": False,
-                    "details": "No condition tree defined",
-                    "selected_branch_id": "false",
-                },
-            )
+        node_data = self.node_data
 
         try:
-            result = self._evaluate_group(condition_tree, process_data["evaluation_details"])
+            if node_data.cases:
+                # Multi-branch mode: iterate cases, first match wins
+                selected_branch = "false"
+                case_results: list[dict[str, Any]] = []
+
+                for case in node_data.cases:
+                    case_group = ConditionGroupData(
+                        id=case.case_id,
+                        logic=case.logical_operator,
+                        conditions=case.conditions,
+                    )
+                    matched = self._evaluate_group(case_group, process_data["evaluation_details"])
+                    case_results.append({"case_id": case.case_id, "matched": matched})
+                    if matched:
+                        selected_branch = case.case_id
+                        break
+            else:
+                # Backward compatibility: single condition_tree evaluation
+                condition_tree = node_data.condition_tree
+                if not condition_tree:
+                    return NodeRunResult(
+                        status=WorkflowNodeExecutionStatus.SUCCEEDED,
+                        edge_source_handle="false",
+                        inputs=node_inputs,
+                        process_data=process_data,
+                        outputs={
+                            "matched": False,
+                            "details": "No condition tree defined",
+                            "selected_branch_id": "false",
+                        },
+                    )
+
+                result = self._evaluate_group(condition_tree, process_data["evaluation_details"])
+                selected_branch = "true" if result else "false"
+                case_results = [{"case_id": selected_branch, "matched": result}]
         except Exception as e:
             return NodeRunResult(
                 status=WorkflowNodeExecutionStatus.FAILED,
@@ -53,15 +74,15 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                 error=str(e),
             )
 
-        selected_branch = "true" if result else "false"
-
         return NodeRunResult(
             status=WorkflowNodeExecutionStatus.SUCCEEDED,
             edge_source_handle=selected_branch,
             inputs=node_inputs,
             process_data=process_data,
             outputs={
-                "matched": result,
+                "matched": selected_branch != "false",
+                "selected_case_id": selected_branch,
+                "details": {"case_results": case_results},
                 "selected_branch_id": selected_branch,
             },
         )
@@ -172,10 +193,12 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
         node_id: str,
         node_data: DiagnosisRuleNodeData,
     ) -> Mapping[str, Sequence[str]]:
-        """Extract all variable selectors from the condition tree for dependency tracking."""
+        """Extract all variable selectors for dependency tracking.
+
+        When ``cases`` is set, collects from every case's conditions.
+        Otherwise falls back to the legacy ``condition_tree``.
+        """
         mapping: dict[str, list[str]] = {}
-        if not node_data.condition_tree:
-            return mapping
 
         def _collect_from_group(group: ConditionGroupData) -> None:
             for child in group.conditions:
@@ -198,5 +221,15 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
                             key = f"{node_id}.#{selector_key}#"
                             mapping[key] = leaf.variable_selector
 
-        _collect_from_group(node_data.condition_tree)
+        if node_data.cases:
+            for case in node_data.cases:
+                case_group = ConditionGroupData(
+                    id=case.case_id,
+                    logic=case.logical_operator,
+                    conditions=case.conditions,
+                )
+                _collect_from_group(case_group)
+        elif node_data.condition_tree:
+            _collect_from_group(node_data.condition_tree)
+
         return mapping

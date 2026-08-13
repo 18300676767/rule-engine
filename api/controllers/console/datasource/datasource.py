@@ -286,6 +286,31 @@ def _load_clinical_param_fields() -> list[dict]:
 
 # ---- Build catalog definitions (static + dynamic report categories) ----
 
+# TTL cache for catalog definitions to avoid rebuilding on every request
+_CATALOG_CACHE_TTL = 60  # seconds
+_catalog_cache: dict = {"ts": 0.0, "defs": None, "meta": None}
+
+
+def _get_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str, tuple[str, object]]]:
+    """Get the current catalog definitions with TTL cache.
+
+    Static categories are always present. Dynamic report categories are loaded
+    from DB on each cache refresh to handle late-available MySQL connections.
+
+    Returns:
+        (definitions_list, meta_dict)
+    """
+    now = time.time()
+    if _catalog_cache["defs"] is not None and (now - _catalog_cache["ts"]) < _CATALOG_CACHE_TTL:
+        return _catalog_cache["defs"], _catalog_cache["meta"]
+
+    defs, meta = _build_catalog_definitions()
+    _catalog_cache["ts"] = now
+    _catalog_cache["defs"] = defs
+    _catalog_cache["meta"] = meta
+    return defs, meta
+
+
 def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str, tuple[str, object]]]:
     """Build the full catalog: static categories + dynamic report-type categories from DB.
 
@@ -333,9 +358,6 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
     return all_defs, meta
 
 
-_CATALOG_DEFINITIONS, _CATALOG_META = _build_catalog_definitions()
-
-
 def _resolve_fields(loader_or_list: object) -> list[dict]:
     """Call loader function or return static list."""
     if callable(loader_or_list):
@@ -355,8 +377,9 @@ class DataSourceCatalogApi(Resource):
     @account_initialization_required
     def get(self):
         t0 = time.perf_counter()
+        catalog_definitions, _ = _get_catalog_definitions()
         catalog = []
-        for key, name, loader in _CATALOG_DEFINITIONS:
+        for key, name, loader in catalog_definitions:
             t1 = time.perf_counter()
             fields = _resolve_fields(loader)
             dt = (time.perf_counter() - t1) * 1000
@@ -379,7 +402,8 @@ class DataSourceFieldsApi(Resource):
     @account_initialization_required
     def get(self, category_key: str):
         t0 = time.perf_counter()
-        entry = _CATALOG_META.get(category_key)
+        _, catalog_meta = _get_catalog_definitions()
+        entry = catalog_meta.get(category_key)
         if not entry:
             return {"error": f"Category '{category_key}' not found"}, 404
         name, loader = entry

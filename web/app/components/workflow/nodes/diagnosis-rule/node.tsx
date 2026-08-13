@@ -27,41 +27,49 @@ function countConditions(group: ConditionGroup): { leaves: number; groups: numbe
 const DiagnosisRuleNode: FC<NodeProps<DiagnosisRuleNodeType>> = (props) => {
   const { data } = props
   const { t } = useTranslation()
-  const tree = data.condition_tree
-  const { leaves, groups } = tree ? countConditions(tree) : { leaves: 0, groups: 0 }
+  const cases = data.cases || []
+  const casesLength = cases.length
 
   return (
     <div className="px-3 py-2">
-      <div className="flex items-center space-x-1">
-        <span className="text-xs font-semibold text-text-secondary">
-          {t(`${i18nPrefix}.logic_${tree?.logic || 'AND'}`, { ns: 'workflow' })}
-        </span>
-        {tree?.logic === 'AT_LEAST' && (
-          <span className="text-xs text-text-tertiary">
-            (min: {tree.minimum || 1})
-          </span>
-        )}
-      </div>
-      <div className="mt-1 text-[10px] text-text-tertiary">
-        {leaves > 0
-          ? `${leaves} condition(s)${groups > 0 ? `, ${groups} group(s)` : ''}`
-          : t(`${i18nPrefix}.noConditions`, { ns: 'workflow' })}
-      </div>
+      {
+        cases.map((caseItem, index) => {
+          // Build a virtual root group to count conditions for this case
+          const root: ConditionGroup = {
+            id: '__root',
+            logic: caseItem.logical_operator,
+            conditions: caseItem.conditions,
+          }
+          const { leaves, groups } = countConditions(root)
 
-      {/* IF branch */}
-      <div className="relative mt-2 flex h-6 items-center justify-between rounded-md bg-workflow-block-parma-bg px-2">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-state-active-bg" />
-          <span className="text-xs font-semibold text-text-secondary">IF</span>
-        </div>
-        <NodeSourceHandle
-          {...props}
-          handleId="true"
-          handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
-        />
-      </div>
+          return (
+            <div key={caseItem.case_id}>
+              <div className="relative flex h-6 items-center px-1">
+                <div className="flex w-full items-center justify-between">
+                  <div className="text-[10px] font-semibold text-text-tertiary">
+                    {casesLength > 1 && `CASE ${index + 1}`}
+                  </div>
+                  <div className="text-[12px] font-semibold text-text-secondary">
+                    {index === 0 ? 'IF' : 'ELIF'}
+                  </div>
+                </div>
+                <NodeSourceHandle
+                  {...props}
+                  handleId={caseItem.case_id}
+                  handleClassName="!top-1/2 !-right-[21px] !-translate-y-1/2"
+                />
+              </div>
+              <div className="mt-0.5 text-[10px] text-text-tertiary">
+                {leaves > 0
+                  ? `${leaves} condition(s)${groups > 0 ? `, ${groups} group(s)` : ''}`
+                  : t(`${i18nPrefix}.noConditions`, { ns: 'workflow' })}
+              </div>
+            </div>
+          )
+        })
+      }
 
-      {/* ELSE branch */}
+      {/* ELSE branch (always last) */}
       <div className="relative mt-1.5 flex h-6 items-center justify-between rounded-md bg-workflow-block-parma-bg px-2">
         <div className="flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full bg-state-disabled-bg" />

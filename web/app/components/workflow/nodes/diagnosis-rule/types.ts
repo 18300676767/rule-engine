@@ -20,8 +20,15 @@ export type ConditionGroup = {
 
 export type ConditionTreeNode = ConditionGroup  // root is always a ConditionGroup
 
+export type CaseItem = {
+  case_id: string
+  logical_operator: 'AND' | 'OR' | 'AT_LEAST'
+  conditions: Array<LeafCondition | ConditionGroup>
+}
+
 export type DiagnosisRuleNodeType = CommonNodeType & {
-  condition_tree: ConditionTreeNode
+  condition_tree: ConditionTreeNode     // kept for backward compatibility
+  cases?: CaseItem[]                    // multi-branch cases (if set, condition_tree is ignored)
   output_fields?: string[]
   _targetBranches?: Array<{ id: string; name: string }>
 }

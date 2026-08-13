@@ -1,5 +1,6 @@
 import type { ElkNode, LayoutOptions } from 'elkjs/lib/elk-api'
 import type { HumanInputNodeType } from '@/app/components/workflow/nodes/human-input/types'
+import type { DiagnosisRuleNodeType } from '@/app/components/workflow/nodes/diagnosis-rule/types'
 import type { CaseItem, IfElseNodeType } from '@/app/components/workflow/nodes/if-else/types'
 import type {
   Edge,
@@ -358,14 +359,25 @@ const buildDiagnosisRuleWithPorts = (
   if (childEdges.length <= 1)
     return null
 
-  // Sort: 'true' (IF) first, 'false' (ELSE) last
+  // Sort: by cases order (aligned with buildIfElseWithPorts)
+  const cases = (diagnosisRuleNode.data as DiagnosisRuleNodeType).cases || []
   const sortedChildEdges = [...childEdges].sort((edgeA, edgeB) => {
     const handleA = edgeA.sourceHandle
     const handleB = edgeB.sourceHandle
-    if (handleA === 'false')
-      return 1
-    if (handleB === 'false')
-      return -1
+
+    if (handleA && handleB) {
+      if (handleA === 'false')
+        return 1
+      if (handleB === 'false')
+        return -1
+
+      const indexA = cases.findIndex(c => c.case_id === handleA)
+      const indexB = cases.findIndex(c => c.case_id === handleB)
+
+      if (indexA !== -1 && indexB !== -1)
+        return indexA - indexB
+    }
+
     return 0
   })
 

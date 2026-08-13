@@ -20,6 +20,9 @@ const DiagnosisRuleDefault: NodeDefault<DiagnosisRuleNodeType> = {
       logic: 'AND',
       conditions: [],
     },
+    cases: [
+      { case_id: 'true', logical_operator: 'AND', conditions: [] },
+    ],
     output_fields: ['matched', 'details'],
     _targetBranches: [
       { id: 'true', name: 'IF' },
@@ -27,8 +30,17 @@ const DiagnosisRuleDefault: NodeDefault<DiagnosisRuleNodeType> = {
     ],
   } as unknown as DiagnosisRuleNodeType,
   checkValid(payload: DiagnosisRuleNodeType) {
-    if (!payload.condition_tree || !payload.condition_tree.conditions?.length) {
-      return { isValid: false, errorMessage: 'Please add at least one condition' }
+    const { cases } = payload
+    if (!cases || cases.length === 0) {
+      // Fall back to condition_tree check for legacy workflows
+      if (!payload.condition_tree || !payload.condition_tree.conditions?.length)
+        return { isValid: false, errorMessage: 'Please add at least one condition' }
+    }
+    else {
+      for (let i = 0; i < cases.length; i++) {
+        if (!cases[i].conditions?.length)
+          return { isValid: false, errorMessage: `Please add conditions to ${i === 0 ? 'IF' : 'ELIF'} case ${i + 1}` }
+      }
     }
     return { isValid: true }
   },

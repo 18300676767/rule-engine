@@ -1,3 +1,4 @@
+import type { DiagnosisRuleNodeType } from '../nodes/diagnosis-rule/types'
 import type { IfElseNodeType } from '../nodes/if-else/types'
 import type { IterationNodeType } from '../nodes/iteration/types'
 import type { LoopNodeType } from '../nodes/loop/types'
@@ -254,8 +255,17 @@ export const initialNodes = (originNodes: Node[], originEdges: Edge[]) => {
     }
 
     if (node.data.type === BlockEnum.DiagnosisRule) {
+      const drData = node.data as DiagnosisRuleNodeType
+      // Transparent migration: synthesize cases from condition_tree for legacy workflows
+      if (!drData.cases && drData.condition_tree) {
+        (node.data as DiagnosisRuleNodeType).cases = [{
+          case_id: 'true',
+          logical_operator: drData.condition_tree.logic,
+          conditions: drData.condition_tree.conditions,
+        }]
+      }
       node.data._targetBranches = branchNameCorrect([
-        { id: 'true', name: '' },
+        ...(node.data as DiagnosisRuleNodeType).cases!.map(item => ({ id: item.case_id, name: '' })),
         { id: 'false', name: '' },
       ])
     }
