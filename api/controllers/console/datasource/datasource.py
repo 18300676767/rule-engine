@@ -125,6 +125,17 @@ def _load_patient_basic_fields() -> list[dict]:
         ]
 
 
+# ---- Value type mapping: indicator_dictionary.value_type → Dify frontend type ----
+# Design spec: 改造方案 L166 — 检验指标配置包含「字段Code + 单位 + 值类型」
+# value_type values from DB: numeric, ordinal, boolean, categorical
+_VALUE_TYPE_MAP: dict[str, str] = {
+    "numeric": "number",
+    "ordinal": "string",
+    "boolean": "boolean",
+    "categorical": "string",
+}
+
+
 def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
     """Return a loader function that fetches indicators for a specific report category."""
     def loader() -> list[dict]:
@@ -132,7 +143,7 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
             conn = _get_connection()
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT i.indicator_code, i.indicator_name, i.unit "
+                    "SELECT i.indicator_code, i.indicator_name, i.unit, i.value_type "
                     "FROM report_category_indicator_rel m "
                     "JOIN indicator_dictionary i ON m.indicator_id = i.id "
                     "WHERE m.category_id = %s AND i.is_active = 1 "
@@ -145,7 +156,7 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
                 {
                     "code": r["indicator_code"],
                     "name": r["indicator_name"],
-                    "type": "number",
+                    "type": _VALUE_TYPE_MAP.get(r.get("value_type") or "numeric", "number"),
                     "unit": r.get("unit") or None,
                 }
                 for r in rows
