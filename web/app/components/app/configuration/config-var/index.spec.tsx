@@ -272,7 +272,7 @@ describe('ConfigVar', () => {
       expect(onPromptVariablesChange).not.toHaveBeenCalled()
     })
 
-    it('should show error when variable label is duplicated', async () => {
+    it('should allow saving when labels are duplicated but keys are unique', async () => {
       const onPromptVariablesChange = vi.fn()
       const firstVar = createPromptVariable({ key: 'first', name: 'First' })
       const secondVar = createPromptVariable({ key: 'second', name: 'Second' })
@@ -294,8 +294,9 @@ describe('ConfigVar', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'common.operation.save' }))
 
-      expect(Toast.notify).toHaveBeenCalled()
-      expect(onPromptVariablesChange).not.toHaveBeenCalled()
+      await waitFor(() => {
+        expect(onPromptVariablesChange).toHaveBeenCalledTimes(1)
+      })
     })
   })
 

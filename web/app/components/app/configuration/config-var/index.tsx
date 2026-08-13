@@ -71,12 +71,6 @@ const getDuplicateError = (list: PromptVariable[]) => {
       typeName: 'variableConfig.varName',
     }
   }
-  if (hasDuplicateStr(list.map(item => item.name as string))) {
-    return {
-      errorMsgKey: 'varKeyError.keyAlreadyExists',
-      typeName: 'variableConfig.labelName',
-    }
-  }
   return null
 }
 

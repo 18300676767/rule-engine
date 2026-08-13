@@ -136,7 +136,7 @@ _VALUE_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
+def _load_lab_indicator_fields_by_category(category_id: int, category_code: str = None) -> callable:
     """Return a loader function that fetches indicators for a specific report category."""
     def loader() -> list[dict]:
         try:
@@ -154,7 +154,7 @@ def _load_lab_indicator_fields_by_category(category_id: int) -> callable:
             conn.close()
             return [
                 {
-                    "code": r["indicator_code"],
+                    "code": f"{category_code}_{r['indicator_code']}" if category_code else r["indicator_code"],
                     "name": r["indicator_name"],
                     "type": _VALUE_TYPE_MAP.get(r.get("value_type") or "numeric", "number"),
                     "unit": r.get("unit") or None,
@@ -252,14 +252,14 @@ def _load_report_type_fields() -> list[dict]:
         conn = _get_connection()
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT category_name FROM report_category_config "
+                "SELECT category_name, category_code FROM report_category_config "
                 "WHERE is_active=1 ORDER BY sort_order, category_name"
             )
             rows = cur.fetchall()
         conn.close()
         return [
             {
-                "code": f"report_{r['category_name']}",
+                "code": f"report_{r.get('category_code') or r['category_name']}",
                 "name": r["category_name"],
                 "type": "boolean",
             }
@@ -302,7 +302,7 @@ _CATALOG_CACHE_TTL = 60  # seconds
 _catalog_cache: dict = {"ts": 0.0, "defs": None, "meta": None}
 
 
-def _get_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str, tuple[str, object]]]:
+def _get_catalog_definitions() -> tuple[list[tuple[str, str, object, str | None]], dict[str, tuple[str, object]]]:
     """Get the current catalog definitions with TTL cache.
 
     Static categories are always present. Dynamic report categories are loaded
@@ -322,31 +322,33 @@ def _get_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str,
     return defs, meta
 
 
-def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[str, tuple[str, object]]]:
+def _build_catalog_definitions() -> tuple[list[tuple[str, str, object, str | None]], dict[str, tuple[str, object]]]:
     """Build the full catalog: static categories + dynamic report-type categories from DB.
 
     Returns:
         (definitions_list, meta_dict)
+        Each definition is a 4-tuple: (key, name, loader, category_code).
+        category_code is None for static categories.
     """
     # Static categories (always present)
     # Note: symptom_sign_config is NOT a workflow input — symptoms are captured
     # via inquiry questions (chest_pain etc.), so it's excluded from the catalog.
-    static_defs: list[tuple[str, str, object]] = [
-        ("patient_basic", "病人基本信息", _load_patient_basic_fields),
-        ("western_inquiry", "西医问诊", _load_inquiry_fields("western", "西医问诊")),
-        ("tcm_inquiry", "中医问诊", _load_inquiry_fields("tcm", "中医问诊")),
-        ("clinical_params", "临床参数", _load_clinical_param_fields),
-        ("icd10", "ICD-10 诊断编码", _load_icd10_fields),
-        ("exam_results", "检查报告类型", _load_report_type_fields),
+    static_defs: list[tuple[str, str, object, str | None]] = [
+        ("patient_basic", "病人基本信息", _load_patient_basic_fields, None),
+        ("western_inquiry", "西医问诊", _load_inquiry_fields("western", "西医问诊"), None),
+        ("tcm_inquiry", "中医问诊", _load_inquiry_fields("tcm", "中医问诊"), None),
+        ("clinical_params", "临床参数", _load_clinical_param_fields, None),
+        ("icd10", "ICD-10 诊断编码", _load_icd10_fields, None),
+        ("exam_results", "检查报告类型", _load_report_type_fields, None),
     ]
 
     # Dynamic categories: report types with indicator mappings from DB
-    dynamic_defs: list[tuple[str, str, object]] = []
+    dynamic_defs: list[tuple[str, str, object, str | None]] = []
     try:
         conn = _get_connection()
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT rc.id, rc.category_name "
+                "SELECT rc.id, rc.category_name, rc.category_code "
                 "FROM report_category_config rc "
                 "WHERE rc.is_active = 1 "
                 "AND EXISTS (SELECT 1 FROM report_category_indicator_rel m "
@@ -358,14 +360,15 @@ def _build_catalog_definitions() -> tuple[list[tuple[str, str, object]], dict[st
         for cat in categories:
             key = f"report_cat_{cat['id']}"
             name = cat["category_name"]
-            loader = _load_lab_indicator_fields_by_category(cat["id"])
-            dynamic_defs.append((key, name, loader))
+            code = cat.get("category_code")
+            loader = _load_lab_indicator_fields_by_category(cat["id"], category_code=code)
+            dynamic_defs.append((key, name, loader, code))
         logger.info("[datasource] Loaded %d dynamic report categories from DB", len(dynamic_defs))
     except Exception as e:
         logger.error("[datasource] Failed to load dynamic report categories: %s", e)
 
     all_defs = static_defs + dynamic_defs
-    meta = {key: (name, loader) for key, name, loader in all_defs}
+    meta = {key: (name, loader) for key, name, loader, _code in all_defs}
     return all_defs, meta
 
 
@@ -390,7 +393,7 @@ class DataSourceCatalogApi(Resource):
         t0 = time.perf_counter()
         catalog_definitions, _ = _get_catalog_definitions()
         catalog = []
-        for key, name, loader in catalog_definitions:
+        for key, name, loader, cat_code in catalog_definitions:
             t1 = time.perf_counter()
             fields = _resolve_fields(loader)
             dt = (time.perf_counter() - t1) * 1000
@@ -398,6 +401,7 @@ class DataSourceCatalogApi(Resource):
             catalog.append({
                 "key": key,
                 "name": name,
+                "code": cat_code,
                 "field_count": len(fields),
             })
         total = (time.perf_counter() - t0) * 1000

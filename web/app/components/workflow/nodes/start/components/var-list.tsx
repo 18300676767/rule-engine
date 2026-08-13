@@ -32,14 +32,10 @@ const VarList: FC<Props> = ({
         draft[index] = payload
       })
       let errorMsgKey: 'varKeyError.keyAlreadyExists' | '' = ''
-      let typeName: 'variableConfig.varName' | 'variableConfig.labelName' | '' = ''
+      let typeName: 'variableConfig.varName' | '' = ''
       if (hasDuplicateStr(newList.map(item => item.variable))) {
         errorMsgKey = 'varKeyError.keyAlreadyExists'
         typeName = 'variableConfig.varName'
-      }
-      else if (hasDuplicateStr(newList.map(item => item.label as string))) {
-        errorMsgKey = 'varKeyError.keyAlreadyExists'
-        typeName = 'variableConfig.labelName'
       }
 
       if (errorMsgKey && typeName) {

@@ -172,7 +172,7 @@ describe('start/use-config', () => {
     expect(result.current.isShowRemoveVarConfirm).toBe(false)
   })
 
-  it('should validate duplicate variables and labels before adding a new variable', () => {
+  it('should validate duplicate variable keys before adding a new variable', () => {
     const { result } = renderHook(() => useConfig('start-node', currentInputs))
 
     let added = true
@@ -207,7 +207,7 @@ describe('start/use-config', () => {
     }))
   })
 
-  it('should clear inspector vars for non-remove list updates and reject duplicate labels', () => {
+  it('should clear inspector vars for non-remove list updates and allow duplicate labels with unique keys', () => {
     const { result } = renderHook(() => useConfig('start-node', currentInputs))
     const typeEditedList = [
       createInputVar({
@@ -228,7 +228,7 @@ describe('start/use-config', () => {
     expect(mockDeleteNodeInspectorVars).toHaveBeenCalledWith('start-node')
 
     toastSpy.mockClear()
-    let added = true
+    let added = false
     act(() => {
       added = result.current.handleAddVariable(createInputVar({
         label: 'Age',
@@ -236,10 +236,12 @@ describe('start/use-config', () => {
       }))
     })
 
-    expect(added).toBe(false)
-    expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'error',
-      message: 'varKeyError.keyAlreadyExists',
+    // Label duplication is allowed as long as variable key is unique
+    expect(added).toBe(true)
+    expect(mockSetInputs).toHaveBeenCalledWith(expect.objectContaining({
+      variables: expect.arrayContaining([
+        expect.objectContaining({ variable: 'new_age' }),
+      ]),
     }))
   })
 })

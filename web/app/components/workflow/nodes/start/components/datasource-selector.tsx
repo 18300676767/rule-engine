@@ -17,6 +17,7 @@ type DataSourceField = {
 type DataSourceCategory = {
   key: string
   name: string
+  code?: string | null
   field_count: number
   fields?: DataSourceField[]
 }
@@ -117,6 +118,10 @@ const DataSourceSelector: FC<Props> = ({ onAddVariable, onAddVariables, existing
     const fields = loadedFields[categoryKey] || []
     const selected = selectedFields[categoryKey] || new Set()
     const toAdd: InputVar[] = []
+    // Find category name for label prefix
+    const cat = categories.find(c => c.key === categoryKey)
+    // Use short category code (e.g. "ICLI") if available, otherwise fall back to category name
+    const prefix = cat?.code || (cat ? cat.name : categoryKey)
     fields.forEach(f => {
       if (selected.has(f.code) && !existingVarKeys.includes(f.code)) {
         const varType = f.type === 'number' ? InputVarType.number
@@ -124,7 +129,7 @@ const DataSourceSelector: FC<Props> = ({ onAddVariable, onAddVariables, existing
           : InputVarType.textInput
         toAdd.push({
           variable: f.code,
-          label: f.name,
+          label: `${prefix}${f.name}`,
           type: varType,
           required: false,
           max_length: varType === InputVarType.textInput ? 256 : undefined,
