@@ -160,7 +160,21 @@ class DiagnosisRuleNode(Node[DiagnosisRuleNodeData]):
         variable = variable_pool.get(condition.variable_selector)
 
         if variable is None:
-            raise ValueError(f"Variable {condition.variable_selector} not found")
+            # Treat a missing variable as condition-not-satisfied instead of
+            # raising. Rules may reference outputs of branch paths that were
+            # never executed; semantically that means the path did not match,
+            # so the leaf evaluates to false and the node falls through to
+            # its false/ELSE branch instead of failing the whole run.
+            details.append({
+                "condition_id": condition.id,
+                "variable_selector": condition.variable_selector,
+                "operator": condition.comparison_operator,
+                "actual_value": None,
+                "expected_value": condition.value,
+                "result": False,
+                "missing_variable": True,
+            })
+            return False
 
         actual_value = variable.value if variable else None
         expected_value: Any = condition.value

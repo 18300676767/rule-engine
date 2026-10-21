@@ -25,6 +25,10 @@ class _StubErrorHandler:
     """Minimal error handler stub for tests."""
 
 
+class _StubSkipPropagator:
+    """Minimal skip propagator stub for tests."""
+
+
 class _StubNode:
     """Simple node stub exposing the attributes needed by the state manager."""
 
@@ -61,6 +65,7 @@ def _build_event_handler(node_id: str) -> tuple[EventHandler, EventManager, Grap
         edge_processor=_StubEdgeProcessor(),
         state_manager=state_manager,
         error_handler=_StubErrorHandler(),
+        skip_propagator=_StubSkipPropagator(),
     )
 
     return handler, event_manager, graph_execution

@@ -38,7 +38,7 @@ from ..response_coordinator import ResponseStreamCoordinator
 if TYPE_CHECKING:
     from ..error_handler import ErrorHandler
     from ..graph_state_manager import GraphStateManager
-    from ..graph_traversal import EdgeProcessor
+    from ..graph_traversal import EdgeProcessor, SkipPropagator
     from .event_manager import EventManager
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,7 @@ class EventHandler:
         edge_processor: "EdgeProcessor",
         state_manager: "GraphStateManager",
         error_handler: "ErrorHandler",
+        skip_propagator: "SkipPropagator",
     ) -> None:
         """
         Initialize the event handler registry.
@@ -76,6 +77,7 @@ class EventHandler:
             edge_processor: Edge processor for edge traversal
             state_manager: Unified state manager
             error_handler: Error handler
+            skip_propagator: Propagator for skip states
         """
         self._graph = graph
         self._graph_runtime_state = graph_runtime_state
@@ -85,6 +87,7 @@ class EventHandler:
         self._edge_processor = edge_processor
         self._state_manager = state_manager
         self._error_handler = error_handler
+        self._skip_propagator = skip_propagator
 
     def dispatch(self, event: GraphNodeEventBase) -> None:
         """
@@ -205,7 +208,7 @@ class EventHandler:
 
         # Handle response node outputs
         if node.execution_type == NodeExecutionType.RESPONSE:
-            self._update_response_outputs(event.node_run_result.outputs)
+            self._update_response_outputs(event.node_id, event.node_run_result.outputs)
 
         # Collect the event
         self._event_collector.collect(event)
@@ -247,6 +250,13 @@ class EventHandler:
             self._graph_execution.fail(RuntimeError(event.error))
             self._event_collector.collect(event)
             self._state_manager.finish_execution(event.node_id)
+            # Mark outgoing edges as skipped so downstream nodes waiting on this
+            # path can become ready based on remaining successful paths.
+            # Without this, edges of failed nodes stay UNKNOWN forever and any
+            # downstream node with multiple inputs is never scheduled.
+            for edge in self._graph.get_outgoing_edges(event.node_id):
+                self._state_manager.mark_edge_skipped(edge.id)
+                self._skip_propagator.propagate_skip_from_edge(edge.id)
 
     @_dispatch.register
     def _(self, event: NodeRunExceptionEvent) -> None:
@@ -285,7 +295,7 @@ class EventHandler:
 
         # Update response outputs if applicable
         if node.execution_type == NodeExecutionType.RESPONSE:
-            self._update_response_outputs(event.node_run_result.outputs)
+            self._update_response_outputs(event.node_id, event.node_run_result.outputs)
 
         self._state_manager.finish_execution(event.node_id)
 
@@ -336,10 +346,13 @@ class EventHandler:
         for variable_name, variable_value in outputs.items():
             self._graph_runtime_state.variable_pool.add((node_id, variable_name), variable_value)
 
-    def _update_response_outputs(self, outputs: Mapping[str, object]) -> None:
-        """Update response outputs for response nodes."""
-        # TODO: Design a mechanism for nodes to notify the engine about how to update outputs
-        # in runtime state, rather than allowing nodes to directly access runtime state.
+    def _update_response_outputs(self, node_id: str, outputs: Mapping[str, object]) -> None:
+        """Update response outputs for response nodes.
+
+        When multiple response nodes (End/Answer) produce the same output key,
+        values are collected into a list instead of overwriting each other,
+        so parallel branch results are all preserved.
+        """
         for key, value in outputs.items():
             if key == "answer":
                 existing = self._graph_runtime_state.get_output("answer", "")
@@ -348,4 +361,12 @@ class EventHandler:
                 else:
                     self._graph_runtime_state.set_output("answer", value)
             else:
-                self._graph_runtime_state.set_output(key, value)
+                # Collect same-key outputs from multiple response nodes into a list
+                existing = self._graph_runtime_state.get_output(key)
+                if existing is None:
+                    self._graph_runtime_state.set_output(key, value)
+                elif isinstance(existing, list):
+                    existing.append(value)
+                    self._graph_runtime_state.set_output(key, existing)
+                else:
+                    self._graph_runtime_state.set_output(key, [existing, value])

@@ -773,6 +773,9 @@ services:
     volumes:
       # Mount the storage directory to the container, for storing user files.
       - ./volumes/app/storage:/app/api/storage
+      # Mount local dify_graph source for engine-level patches
+      # (multi-End output collection + failed-edge skip propagation).
+      - ../api/dify_graph:/app/api/dify_graph
     networks:
       - ssrf_proxy_network
       - default
@@ -812,6 +815,9 @@ services:
     volumes:
       # Mount the storage directory to the container, for storing user files.
       - ./volumes/app/storage:/app/api/storage
+      # Mount local dify_graph source for engine-level patches
+      # (multi-End output collection + failed-edge skip propagation).
+      - ../api/dify_graph:/app/api/dify_graph
     networks:
       - ssrf_proxy_network
       - default

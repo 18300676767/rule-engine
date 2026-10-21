@@ -187,6 +187,7 @@ class GraphEngine:
             edge_processor=self._edge_processor,
             state_manager=self._state_manager,
             error_handler=self._error_handler,
+            skip_propagator=self._skip_propagator,
         )
 
         # Dispatches events and manages execution flow
