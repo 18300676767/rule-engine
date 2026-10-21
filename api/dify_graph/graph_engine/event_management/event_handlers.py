@@ -2,6 +2,7 @@
 Event handler implementations for different event types.
 """
 
+import json
 import logging
 from collections.abc import Mapping
 from functools import singledispatchmethod
@@ -352,6 +353,10 @@ class EventHandler:
         When multiple response nodes (End/Answer) produce the same output key,
         values are collected into a list instead of overwriting each other,
         so parallel branch results are all preserved.
+        
+        For non-answer keys, if the value is a JSON string, it will be parsed
+        into an object before collection, so multi-End outputs are object lists
+        rather than string lists.
         """
         for key, value in outputs.items():
             if key == "answer":
@@ -361,6 +366,13 @@ class EventHandler:
                 else:
                     self._graph_runtime_state.set_output("answer", value)
             else:
+                # Try to parse JSON strings into objects for cleaner multi-End output
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except (json.JSONDecodeError, ValueError):
+                        pass  # Keep as string if not valid JSON
+                
                 # Collect same-key outputs from multiple response nodes into a list
                 existing = self._graph_runtime_state.get_output(key)
                 if existing is None:
